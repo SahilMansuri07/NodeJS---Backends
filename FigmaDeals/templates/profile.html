@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>User Profile</title>
+
+<style>
+
+body{
+    font-family: Arial;
+    margin:0;
+    background:#f4f6f9;
+}
+
+/* cover photo */
+
+.cover{
+    width:100%;
+    height:220px;
+    overflow:hidden;
+}
+
+.cover img{
+    width:100%;
+    height:220px;
+    object-fit:cover;
+}
+
+/* profile section */
+
+.profile-box{
+    width:80%;
+    margin:auto;
+    background:white;
+    padding:20px;
+    margin-top:-60px;
+    border-radius:8px;
+    box-shadow:0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* profile header */
+
+.profile-header{
+    display:flex;
+    align-items:center;
+    gap:20px;
+}
+
+.profile-header img{
+    width:110px;
+    height:110px;
+    border-radius:50%;
+    border:4px solid white;
+    object-fit:cover;
+}
+
+/* name */
+
+.profile-name{
+    font-size:22px;
+    font-weight:bold;
+}
+
+/* bio */
+
+.bio{
+    color:#555;
+    margin-top:5px;
+}
+
+/* stats */
+
+.stats{
+    display:flex;
+    gap:40px;
+    margin-top:20px;
+}
+
+.stats div{
+    text-align:center;
+}
+
+.stats h3{
+    margin:0;
+}
+
+/* links */
+
+.stats a{
+    text-decoration:none;
+    color:#007bff;
+    font-size:14px;
+}
+
+/* posts */
+
+.posts{
+    width:80%;
+    margin:30px auto;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    gap:15px;
+}
+
+.post{
+    background:white;
+    border-radius:6px;
+    overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+.post img{
+    width:100%;
+    height:200px;
+    object-fit:cover;
+}
+
+.no-post{
+    text-align:center;
+    width:100%;
+    font-size:18px;
+    color:#777;
+}
+
+</style>
+</head>
+
+<body>
+
+<% if(profileData.udata && profileData.udata.length > 0){ %>
+
+<% const user = profileData.udata[0]; %>
+
+<!-- COVER PHOTO -->
+
+<div class="cover">
+<img src="/uploads/<%= user.cover_photo || 'default-cover.jpg' %>">
+</div>
+
+<!-- PROFILE INFO -->
+
+<div class="profile-box">
+
+<div class="profile-header">
+
+<img src="/uploads/<%= user.profile_pic || 'default-user.png' %>">
+
+<div>
+
+<div class="profile-name">
+<%= user.full_name %>
+
+<% if(user.is_premium == 1){ %>
+<span style="color:gold;">⭐ Premium</span>
+<% } %>
+
+</div>
+
+<div class="bio">
+<%= user.bio || 'No bio available' %>
+</div>
+
+<p>
+Company : <b><%= user.company_name || 'N/A' %></b>
+</p>
+
+<p>
+Category : <b><%= user.business_category || 'N/A' %></b>
+</p>
+
+</div>
+
+</div>
+
+<!-- STATS -->
+
+<div class="stats">
+
+<div>
+<h3><%= user.total_posts_count %></h3>
+Posts
+</div>
+
+<div>
+<h3><%= user.followers_count %></h3>
+<a href="/followers/<%= user.user_id %>">Followers</a>
+</div>
+
+<div>
+<h3><%= user.following_count %></h3>
+<a href="/following/<%= user.user_id %>">Following</a>
+</div>
+
+</div>
+
+</div>
+
+<% } %>
+
+
+<!-- USER POSTS -->
+
+<div class="posts">
+
+<% if(profileData.postimage && profileData.postimage.length > 0){ %>
+
+<% profileData.postimage.forEach(post => { %>
+
+<div class="post">
+<a href="/post/<%= post.post_id %>">
+<img src="/uploads/<%= post.postimage %>">
+</a>
+</div>
+
+<% }) %>
+
+<% } else { %>
+
+<div class="no-post">
+No posts available
+</div>
+
+<% } %>
+
+</div>
+
+</body>
+</html>

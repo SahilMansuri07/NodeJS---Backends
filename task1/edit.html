@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Trainee</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f6f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .form-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        form {
+            background: #fff;
+            padding: 30px;
+            width: 350px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Keeps padding inside the width */
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            background-color: #28a745; /* Green for "Update" */
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        .back-link {
+            margin-top: 20px;
+            text-decoration: none;
+            color: #007bff;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="form-container">
+        <h1>Edit Trainee</h1>
+
+        <form action="/updateUser/<%= result.id %>" method="POST">
+
+            <label>Name:</label>
+            <input type="text" name="name" value="<%= result.name %>" required>
+
+            <label>Email:</label>
+            <input type="email" name="email" value="<%= result.email %>" required>
+
+            <label>Phone:</label>
+            <input type="text" name="phone" value="<%= result.phone %>" required>
+
+            <label>Gender:</label>
+            <select name="gender">
+                <option value="Male" <%= result.gender === 'Male' ? 'selected' : '' %>>Male</option>
+                <option value="Female" <%= result.gender === 'Female' ? 'selected' : '' %>>Female</option>
+                <option value="Other" <%= result.gender === 'Other' ? 'selected' : '' %>>Other</option>
+            </select>
+
+            <label>Education:</label>
+            <input type="text" name="education" value="<%= result.education %>">
+
+            <label>Address:</label>
+            <input type="text" name="address" value="<%= result.address %>">
+
+            <label>Mentor Name:</label>
+            <input type="text" name="mentor_name" value="<%= result.mentor_name %>">
+
+            <label>Training Status:</label>
+            <select name="training_status">
+                <option value="Active" <%= result.training_status === 'Active' ? 'selected' : '' %>>Active</option>
+                <option value="Completed" <%= result.training_status === 'Completed' ? 'selected' : '' %>>Completed</option>
+                <option value="Dropped" <%= result.training_status === 'Dropped' ? 'selected' : '' %>>Dropped</option>
+            </select>
+            
+            <button type="submit">Update Trainee</button>
+        </form>
+
+        <a href="/getUser" class="back-link">Back to Listing</a>
+    </div>
+
+</body>
+</html>

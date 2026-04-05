@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Followers</title>
+
+<style>
+
+body{
+    font-family:Arial;
+    margin:0;
+    background:#f5f6fa;
+}
+
+.container{
+    width:60%;
+    margin:40px auto;
+}
+
+.title{
+    font-size:28px;
+    margin-bottom:20px;
+}
+
+.user-card{
+    background:white;
+    display:flex;
+    align-items:center;
+    padding:15px;
+    margin-bottom:10px;
+    border-radius:6px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+.user-card img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    margin-right:15px;
+    object-fit:cover;
+}
+
+.username{
+    font-size:18px;
+    font-weight:bold;
+}
+
+.view-btn{
+    margin-left:auto;
+    text-decoration:none;
+    background:#007bff;
+    color:white;
+    padding:6px 12px;
+    border-radius:4px;
+}
+
+.no-data{
+    text-align:center;
+    margin-top:30px;
+    font-size:18px;
+    color:#777;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="title">Followers</div>
+
+<% if(followersData && followersData.length > 0){ %>
+
+<% followersData.forEach(user => { %>
+
+<div class="user-card">
+
+<img src="/uploads/<%= user.profile_pic || 'default-user.png' %>">
+
+<div class="username">
+<%= user.username %>
+</div>
+
+<a class="view-btn" href="/profile/<%= user.id %>">
+View Profile
+</a>
+
+</div>
+
+<% }) %>
+
+<% } else { %>
+
+<div class="no-data">
+No Followers Found
+</div>
+
+<% } %>
+
+</div>
+
+</body>
+</html>

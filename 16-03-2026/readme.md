@@ -1,0 +1,7 @@
+"-1": "Invalid Apikey",
+    0: "Error",
+    1: "Success",
+    2: "Missing Field",
+    3: "No Data Found",
+    4: "Phone Verification Pending",
+    5: "Profile Setup Pending",

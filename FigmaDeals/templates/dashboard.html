@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Dashboard</title>
+
+<style>
+
+body{
+    font-family: Arial;
+    background:#f4f6f9;
+    margin:0;
+    padding:20px;
+}
+
+h2{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.container{
+    width:90%;
+    margin:auto;
+}
+
+.category-bar{
+    display:flex;
+    gap:15px;
+    margin-bottom:30px;
+    overflow-x:auto;
+}
+
+.category{
+    background:#fff;
+    padding:10px 15px;
+    border-radius:6px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.1);
+    text-align:center;
+}
+
+.category img{
+    width:40px;
+    height:40px;
+}
+
+.posts{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+    gap:20px;
+}
+
+.card{
+    background:#fff;
+    border-radius:8px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.1);
+    padding:15px;
+}
+
+.user-info{
+    display:flex;
+    align-items:center;
+    margin-bottom:10px;
+}
+
+.user-info img{
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    margin-right:10px;
+}
+
+.title{
+    font-size:18px;
+    font-weight:bold;
+    margin:10px 0;
+}
+
+.date{
+    color:#777;
+    font-size:12px;
+}
+
+.address{
+    font-size:13px;
+    color:#555;
+}
+
+.post-images img{
+    width:100%;
+    margin-top:5px;
+    border-radius:5px;
+}
+
+.meta{
+    margin-top:10px;
+    display:flex;
+    justify-content:space-between;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>Deals Dashboard</h2>
+
+<div class="container">
+
+<!-- USER INFO -->
+
+<% if(result.userData && result.userData.length > 0){ %>
+
+<div class="user-info">
+    <img src="/uploads/<%= result.userData[0].profile_pic %>">
+    <div>
+        <b><%= result.userData[0].first_name %></b>
+    </div>
+    <a href="/profile/<%= result.userData[0].id %>">View Profile</a>
+</div>
+
+<% } %>
+
+
+<!-- CATEGORY LIST -->
+
+<div class="category-bar">
+
+<% result.categoryData.forEach(cat => { %>
+
+    <a href="/category/<%= cat.category_id %>">
+    <div class="category">
+          
+        <img src="/uploads/<%= cat.image_url %>">
+        <div><%= cat.name %></div>
+        
+    </div>
+</a>
+
+<% }) %>
+
+</div>
+
+
+<!-- POSTS -->
+
+<div class="posts">
+
+<% result.postsData.forEach(post => { %>
+    <div class="card">
+
+    <div class="user-info">
+        <img src="/uploads/<%= post.profile_pic %>">
+        <div>
+            <b><%= post.first_name %></b>
+            <div class="date"><%= post.date %></div>
+        </div>
+    </div>
+
+    <div class="title">
+        <%= post.title %>
+    </div>
+
+    <div class="address">
+        📍 <%= post.address %>
+    </div>
+
+    <div>
+        Distance: <%= post.Nearest %> km
+    </div>
+
+    <div class="post-images">
+       
+            <% 
+            let images = post.postImage ? post.postImage.split(',') : [];
+            images.forEach(img => { 
+            %>
+
+                <img src="/uploads/<%= img %>">
+
+            <% }) %>
+       
+    </div>
+    
+    <div class="meta">
+        <div>💬 <%= post.total_comments %> comments 
+           
+             </div>
+        <div>⭐ <%= post.Rating ? post.Rating.toFixed(1) : "0" %></div>
+        <a href="/post/<%= post.id %>">
+            <button>View Post</button>
+        </a>
+    </div>
+    
+</div>
+</a>
+
+<% }) %>
+
+</div>       
+
+</div>
+
+</body>
+</html>

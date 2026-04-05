@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trainees Data</title>
+
+     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            background-color: #f4f6f9;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        a {
+            text-decoration: none;
+            color: #007bff;
+            font-weight: 500;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            margin-top: 15px;
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+            padding: 8px;
+            text-align: left;
+        }
+
+        td {
+            padding: 8px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        td a {
+            margin-right: 8px;
+        }
+
+    </style>
+</head>
+<body>
+
+<h1>Trainees Data</h1>
+<a href="/add">Add Trainies</a>
+<% if (result && result.length > 0) { %>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>id</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>phone</th>
+                <th>gender</th>
+                <th>education</th>
+                <th>address</th>
+                <th>mentor</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <% result.forEach(function(element){ %>
+                <tr>
+                    <td><%= element.id %></td>
+                    <td><%= element.name %></td>
+                    <td><%= element.email %></td>
+                    <td><%= element.phone %></td>
+                    <td><%= element.gender %></td>
+                    <td><%= element.education %></td>
+                    <td><%= element.address %></td>
+                    <td><%= element.mentor_name %></td>
+                    <td><%= element.training_status %></td>
+                    <td><a href='http://localhost:8080/edit/<%= element.id %>'>Edit |</a>
+                    <a href='http://localhost:8080/deleteUser/<%= element.id %>'>delete</a></td>
+                </tr>
+            <% }) %>
+
+        </tbody>
+    </table>
+
+<% } else { %>
+
+    <p>No Trainee Data Found</p>
+
+<% } %>
+
+</body>
+</html>

@@ -1,0 +1,2001 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "My API",
+    "version": "1.0.0",
+    "description": "API Documentation"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3002",
+      "description": "Local Server" 
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "name": "token"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "api-key"
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/auth/signup": {
+      "post": {
+        "summary": "User sign up",
+        "description": "Register a new user with username, email, and credentials",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "email", "country_code", "mobile_number", "password"],
+                "properties": {
+                  "username": { "type": "string", "example": "john_doe12" },
+                  "email": { "type": "string", "format": "email", "example": "john12@example.com" },
+                  "country_code": { "type": "string", "example": "+91" },
+                  "mobile_number": { "type": "string", "example": "9876543211" },
+                  "password": { "type": "string", "example": "SecurePass@123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully - Profile Setup Pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 4 },
+                    "message": { "type": "string", "example": "Profile Set Up Pending" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userData": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "number", "example": 1 },
+                            "username": { "type": "string", "example": "john_doe" },
+                            "email": { "type": "string", "example": "john@example.com" },
+                            "phone": { "type": "string", "example": "9876543210" },
+                            "country_code": { "type": "string", "example": "+1" },
+                            "is_active": { "type": "number", "example": 1 }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or registration error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Registration" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Performing Insert In User Registration Table" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/signIn": {
+      "post": {
+        "summary": "User sign in",
+        "description": "Authenticate user with username, password and device info",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password", "device_type", "device_name", "device_model", "os_version", "ip"],
+                "properties": {
+                  "username": { "type": "string", "example": "john_doe" },
+                  "password": { "type": "string", "example": "SecurePass@123" },
+                  "device_type": { "type": "string", "example": "mobile" },
+                  "device_name": { "type": "string", "example": "iPhone 12" },
+                  "device_model": { "type": "string", "example": "iPhone12,1" },
+                  "os_version": { "type": "string", "example": "14.5" },
+                  "ip": { "type": "string", "example": "192.168.1.1" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User successfully logged in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Login Success" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userData": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "number" },
+                            "username": { "type": "string" },
+                            "email": { "type": "string" },
+                            "phone": { "type": "string" },
+                            "full_name": { "type": "string" },
+                            "is_active": { "type": "number" }
+                          }
+                        },
+                        "token": { "type": "string", "example": "Bearer eyJhbGciOiJIUzI1NiIs..." }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Login" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Login" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/profileSetUp": {
+      "post": {
+        "summary": "Complete user profile setup",
+        "description": "Setup user profile with personal and device information",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id", "full_name", "dob", "device_type", "device_name", "device_model", "os_version", "ip"],
+                "properties": {
+                  "user_id": { "type": "number", "example": 1 },
+                  "full_name": { "type": "string", "example": "John Doe" },
+                  "dob": { "type": "string", "example": "1990-01-15" },
+                  "device_type": { "type": "string", "example": "mobile" },
+                  "device_name": { "type": "string", "example": "iPhone 12" },
+                  "device_model": { "type": "string", "example": "iPhone12,1" },
+                  "os_version": { "type": "string", "example": "14.5" },
+                  "ip": { "type": "string", "example": "192.168.1.1" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sign up successful with token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Sign Up Successfull" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userData": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "number" },
+                            "username": { "type": "string" },
+                            "full_name": { "type": "string" },
+                            "email": { "type": "string" }
+                          }
+                        },
+                        "token": { "type": "string", "example": "Bearer eyJhbGciOiJIUzI1NiIs..." }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - user not found or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 3 },
+                    "message": { "type": "string", "example": "User Not Found" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error While Profile Set Up" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/forgotPassword": {
+      "post": {
+        "summary": "Request password reset OTP",
+        "description": "Send OTP to registered email or phone for password reset",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "john@example.com" },
+                  "country_code": { "type": "string", "example": "+1" },
+                  "phone": { "type": "string", "example": "9876543210" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "OTP Sent" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "otpData": {
+                          "type": "object",
+                          "properties": {
+                            "otp": { "type": "string", "example": "123456" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing email or phone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Email or Phone Number Required" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Forgot Password" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/resendOtp": {
+      "post": {
+        "summary": "Resend OTP",
+        "description": "Resend OTP to email or phone",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": { "type": "string", "example": "9876543210" },
+                  "email": { "type": "string", "format": "email", "example": "john@example.com" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New OTP sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "New Otp Sent" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "otpData": {
+                          "type": "object",
+                          "properties": {
+                            "otp": { "type": "string", "example": "123456" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Email or Phone Required" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Resend Otp" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verifyOtp": {
+      "post": {
+        "summary": "Verify OTP code",
+        "description": "Verify OTP sent to email or phone",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["otp"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "john@example.com" },
+                  "phone": { "type": "string", "example": "9876543210" },
+                  "otp": { "type": "string", "example": "123456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP verified successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "OTP Verified" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid OTP or missing email/phone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid or expired OTP" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Verify OTP" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/updatePassword": {
+      "post": {
+        "summary": "Update password after OTP verification",
+        "description": "Set new password after OTP has been verified",
+        "tags": ["Auth"],
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id", "newPassword"],
+                "properties": {
+                  "id": { "type": "number", "example": 1 },
+                  "newPassword": { "type": "string", "example": "NewSecurePass@123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Password Updated Successfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid user ID" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Update Password" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/changePassword": {
+      "post": {
+        "summary": "Change password for logged-in user",
+        "description": "Change password with old and new password validation",
+        "tags": ["Auth"],
+        "security": [
+          {
+            "bearerAuth": [],
+            "apiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["oldPass", "newPass"],
+                "properties": {
+                  "oldPass": { "type": "string", "example": "OldPassword@123" },
+                  "newPass": { "type": "string", "example": "NewPassword@123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Password Changed Successfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid old password or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Old password is incorrect" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Change Password" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "get": {
+        "summary": "User logout",
+        "description": "Logout authenticated user",
+        "tags": ["Auth"],
+        "security": [
+          {
+            "bearerAuth": [],
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User logged out successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Logout Successful" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid token" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Logout" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/getUserProfile": {
+      "get": {
+        "summary": "Get user profile",
+        "description": "Retrieve authenticated user profile with posts",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "User Profile Fetch Successfull" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userData": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "number" },
+                            "username": { "type": "string" },
+                            "full_name": { "type": "string" },
+                            "profile_photo_path": { "type": "string" },
+                            "follower_count": { "type": "number" },
+                            "following_count": { "type": "number" },
+                            "rating_count": { "type": "number" }
+                          }
+                        },
+                        "postData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "post_id": { "type": "number" },
+                              "media": { "type": "array" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Fetching Login User Data" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Fetching Your Profile" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/followUnfollowUser": {
+      "post": {
+        "summary": "Follow or unfollow user",
+        "description": "Toggle follow status for another user",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["other_user_id"],
+                "properties": {
+                  "other_user_id": { "type": "number", "example": 2 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User followed/unfollowed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "User Followed Succesfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid user ID" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Following User" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/updateProfile": {
+      "post": {
+        "summary": "Update user profile",
+        "description": "Update user profile information",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "full_name": { "type": "string", "example": "John Doe Updated" },
+                  "email": { "type": "string", "format": "email", "example": "john.updated@example.com" },
+                  "username": { "type": "string", "example": "john_updated" },
+                  "country_code": { "type": "string", "example": "+1" },
+                  "phone": { "type": "number", "example": 9876543210 },
+                  "profile_photo": { "type": "string", "example": "https://example.com/photo.jpg" },
+                  "dob": { "type": "string", "format": "date", "example": "1990-01-15" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "User Profile Updated Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userData": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "number" },
+                            "username": { "type": "string" },
+                            "email": { "type": "string" },
+                            "full_name": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error or no fields to update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "No Fields To Update" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Updating User Profile" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/userSavePostList": {
+      "post": {
+        "summary": "Get saved posts list",
+        "description": "Retrieve user's saved posts with pagination",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page": { "type": "number", "example": 1 },
+                  "size": { "type": "number", "example": 10 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved posts retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Saved Post Data Fetch Successfull" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "savedPostData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "post_id": { "type": "number" },
+                              "username": { "type": "string" },
+                              "post_type": { "type": "string" },
+                              "media": { "type": "array" },
+                              "ranking_total": { "type": "number" },
+                              "rating_total": { "type": "number" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Fetching Login User Data" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Fetching Save Post List" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/followerList": {
+      "post": {
+        "summary": "Get follower list",
+        "description": "Retrieve list of followers for a user",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                  "user_id": { "type": "number", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Follower list retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Followers List Fetched Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "followersData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "number" },
+                              "username": { "type": "string" },
+                              "profile_photo_path": { "type": "string" },
+                              "is_following": { "type": "number" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 3 },
+                    "message": { "type": "string", "example": "No Followers Found" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Fetching Followers List" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/followingList": {
+      "post": {
+        "summary": "Get following list",
+        "description": "Retrieve list of users that a user is following",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                  "user_id": { "type": "number", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Following list retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Following List Fetched Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "followingData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "number" },
+                              "username": { "type": "string" },
+                              "profile_photo_path": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 3 },
+                    "message": { "type": "string", "example": "No Following Found" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Fetching Following List" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/contactUs": {
+      "post": {
+        "summary": "Submit contact message",
+        "description": "Send a contact message to support team",
+        "tags": ["User"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["full_name", "email", "subject", "description"],
+                "properties": {
+                  "full_name": { "type": "string", "example": "John Doe" },
+                  "email": { "type": "string", "format": "email", "example": "john@example.com" },
+                  "subject": { "type": "string", "example": "Issue with app" },
+                  "description": { "type": "string", "example": "I am facing issue with login functionality" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact message sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Message Sent Successfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "All fields are required" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Contact Us" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/getpost": {
+      "get": {
+        "summary": "Get all posts",
+        "description": "Retrieve trending and regular posts with optional filtering and pagination",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "schema": { "type": "string", "enum": ["all", "new", "following", "expiring"] },
+            "example": "all"
+          },
+          {
+            "in": "query",
+            "name": "pagePost",
+            "schema": { "type": "number" },
+            "example": 1
+          },
+          {
+            "in": "query",
+            "name": "limitPost",
+            "schema": { "type": "number" },
+            "example": 10
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Posts retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Posts Fetched Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "trendingPost": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "post_id": { "type": "number" },
+                              "username": { "type": "string" },
+                              "post_type": { "type": "string" },
+                              "media": { "type": "array" },
+                              "ranking_total": { "type": "number" },
+                              "rating_avg": { "type": "number" }
+                            }
+                          }
+                        },
+                        "postData": { "type": "array", "items": { "type": "object" } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error At Fetching Login User Data" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Fetching Posts" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/categoryList": {
+      "get": {
+        "summary": "Get all categories",
+        "description": "Retrieve list of all available post categories",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Categories retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Category Data Fetch Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "categoryData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "number" },
+                              "name": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid token" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Fetching Category Listing" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/categoryPostList": {
+      "get": {
+        "summary": "Get posts by category",
+        "description": "Retrieve all posts for a specific category with pagination",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "schema": { "type": "number" },
+            "required": true,
+            "example": 1
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "number" },
+            "example": 1
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "number" },
+            "example": 10
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category posts retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Category Post Data Fetch Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "categoryData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "post_id": { "type": "number" },
+                              "username": { "type": "string" },
+                              "media": { "type": "array" },
+                              "rating_avg": { "type": "number" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing category ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Pass Id In Query String" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Category Post List" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/postDetails/{id}": {
+      "get": {
+        "summary": "Get post details",
+        "description": "Retrieve detailed information about a specific post including ranking if expired",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": { "type": "number" },
+            "required": true,
+            "description": "Post ID",
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post details retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Post Data Fetch Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "postData": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "post_id": { "type": "number" },
+                              "username": { "type": "string" },
+                              "post_type": { "type": "string" },
+                              "media": { "type": "array" },
+                              "ranking_total": { "type": "number" },
+                              "rating_avg": { "type": "number" },
+                              "is_saved": { "type": "number" },
+                              "ranking": { "type": "array" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing post ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Pass Id In Parameters" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Fetching Post Details" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/addRanking": {
+      "post": {
+        "summary": "Add ranking to post",
+        "description": "Add rankings/votes to a comparison post (must rank all media)",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["post_id", "ranking"],
+                "properties": {
+                  "post_id": { "type": "number", "example": 1 },
+                  "ranking": {
+                    "type": "array",
+                    "example": [
+                      { "m_id": 1, "rank": 1 },
+                      { "m_id": 2, "rank": 2 },
+                      { "m_id": 3, "rank": 3 }
+                    ],
+                    "items": {
+                      "type": "object",
+                      "required": ["m_id", "rank"],
+                      "properties": {
+                        "m_id": { "type": "number" },
+                        "rank": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ranking added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Ranking Added Successfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error or expired ranking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "You must rank all media of this post" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Adding Ranking" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/addRating": {
+      "post": {
+        "summary": "Add rating to post",
+        "description": "Add a rating/review to a post (1-5 stars)",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["post_id", "rating"],
+                "properties": {
+                  "post_id": { "type": "number", "example": 1 },
+                  "rating": { "type": "number", "example": 4 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rating added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Rating Added Successfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid post ID or rating value" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Adding Rating" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/createPost": {
+      "post": {
+        "summary": "Create a new post",
+        "description": "Create a new post with description, category, and media files",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["description", "cat_id", "post_type", "media"],
+                "properties": {
+                  "description": { "type": "string", "example": "Which one do you prefer?" },
+                  "cat_id": { "type": "number", "example": 1 },
+                  "post_type": { "type": "string", "example": "C" },
+                  "ranking_expired_on": { "type": "string", "format": "date", "example": "2024-12-31" },
+                  "media": {
+                    "type": "array",
+                    "example": [
+                      { "media_type": "image", "media_url": "https://example.com/image1.jpg" },
+                      { "media_type": "image", "media_url": "https://example.com/image2.jpg" }
+                    ],
+                    "items": {
+                      "type": "object",
+                      "required": ["media_type", "media_url"],
+                      "properties": {
+                        "media_type": { "type": "string" },
+                        "media_url": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Post created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Post Created Successfully" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "post_id": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Invalid post data or category ID" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Creating Post" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/post/deletePost": {
+      "post": {
+        "summary": "Delete a post",
+        "description": "Delete a post by post ID (only owner can delete)",
+        "tags": ["Post"],
+        "security": [
+          { "bearerAuth": [] },
+          { "apiKeyAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["post_id"],
+                "properties": {
+                  "post_id": { "type": "number", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Post deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 1 },
+                    "message": { "type": "string", "example": "Post Deleted Successfully" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - post not found or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Post not found or already deleted" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "number", "example": 0 },
+                    "message": { "type": "string", "example": "Error During Deleting Post" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
