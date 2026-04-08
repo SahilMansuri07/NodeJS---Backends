@@ -52,7 +52,7 @@ const adminSignOut = async (req, res) => {
         }
 
         const bearerToken = token.replace("Bearer ", "").trim();
-
+        console.log(bearerToken)
         const [logoutQuery] = await db.query(
             `UPDATE tbl_admin_device SET token = null WHERE token = ? AND is_active = 1`,
             [bearerToken]
