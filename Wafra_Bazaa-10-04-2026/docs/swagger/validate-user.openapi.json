@@ -1,0 +1,1078 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Wafra Bazaar API",
+    "version": "1.0.0",
+    "description": "OpenAPI documentation for the validate-user endpoint only. This endpoint requires the api-key header. Runtime API responses are AES-encrypted strings."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5020",
+      "description": "Local development"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login user",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/add-address": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Add user address",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AddAddressRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/validate-user": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Validate user details",
+        "description": "Validates whether email, mobile, or social account already exists. If social_id + login_type are provided and not found, it creates a verified social user.",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ValidateUserRequest" },
+              "examples": {
+                "emailCheck": {
+                  "summary": "Validate by email",
+                  "value": { "email": "sahil@example.com" }
+                },
+                "mobileCheck": {
+                  "summary": "Validate by mobile",
+                  "value": { "country_code": "+91", "mobile_number": "9510447952" }
+                },
+                "socialCheck": {
+                  "summary": "Validate social and create user",
+                  "value": {
+                    "name": "Sahil",
+                    "email": "sahil.social@example.com",
+                    "country_code": "+91",
+                    "mobile_number": "9510447952",
+                    "login_type": "G",
+                    "social_id": "social_12345"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Encrypted API response",
+            "content": {
+              "application/json": {
+                "schema": { "type": "string", "description": "AES-encrypted payload" },
+                "examples": {
+                  "success": {
+                    "summary": "Success response after validation",
+                    "value": { "code": 1, "message": "Success!", "data": null }
+                  },
+                  "emailExists": {
+                    "summary": "Email already exists",
+                    "value": { "code": 0, "message": "Email already exists. Please try with different email", "data": null }
+                  },
+                  "socialCreated": {
+                    "summary": "Social user created",
+                    "value": {
+                      "code": 1,
+                      "message": "User validated and created successfully",
+                      "data": {
+                        "userData": [{ "id": 16, "email": "sahil.social@example.com" }],
+                        "token": "JWT_TOKEN_VALUE"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": {
+            "$ref": "#/components/responses/ServerErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/request-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Request OTP",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RequestOtpRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/verify-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify OTP",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VerifyOtpRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/resend-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Resend OTP",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RequestOtpRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/forget-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Forget password",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ForgetPasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/verify-forget-password-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify forget-password OTP",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VerifyForgetPasswordOtpRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Reset password",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResetPasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/update-profile": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Update profile image",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateProfileRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/set-profile": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Set profile details",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetProfileRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/set-language": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Set language",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetLanguageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Change password",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/home": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get home data",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/products": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get products",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 12 } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/products-filter": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Filter products",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "subcategory_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "min_price", "in": "query", "schema": { "type": "number" } },
+          { "name": "max_price", "in": "query", "schema": { "type": "number" } },
+          { "name": "min_rating", "in": "query", "schema": { "type": "number" } },
+          { "name": "has_discount", "in": "query", "schema": { "type": "string" } },
+          { "name": "sort_by", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/category-listing": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get category listing",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/product-details": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get product details",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "product_id", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "size_id", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/product-reviews": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get product reviews",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "product_id", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/store-listing": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get store listing",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/store-data": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get store data",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "store_id", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/cart/details": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get cart details",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/cart/add": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Add/update cart item",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CartManageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/cart/remove": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Remove cart item",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CartRemoveRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/payment-method/add": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Add payment method",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AddPaymentMethodRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/place-order": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Place order from cart",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PlaceOrderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/order-history": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get order history",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/order-details": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get order details",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "order_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "order_code", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/favourite/add-remove": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Add or remove favourite",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FavouriteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/favourite/list": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get favourite listing",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/rating/add": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Add product rating",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AddRatingRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/notifications": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get notifications",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/cancel-order": {
+      "put": {
+        "tags": ["User"],
+        "summary": "Cancel order",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CancelOrderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/address/list": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get address list",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/address/set": {
+      "post": {
+        "tags": ["User"],
+        "summary": "Set default address",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetAddressRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/address/update": {
+      "put": {
+        "tags": ["User"],
+        "summary": "Update address",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateAddressRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/user/address/delete": {
+      "delete": {
+        "tags": ["User"],
+        "summary": "Delete address",
+        "security": [{ "apiKeyAuth": [] }, { "tokenAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeleteAddressRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/SuccessOrBusinessErrorResponse" },
+          "401": { "$ref": "#/components/responses/UnauthorizedResponse" },
+          "500": { "$ref": "#/components/responses/ServerErrorResponse" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "SuccessOrBusinessErrorResponse": {
+        "description": "Operation response where code can indicate success or business validation error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiResponse" },
+            "examples": {
+              "success": {
+                "value": { "code": 1, "message": "Success!", "data": null }
+              },
+              "businessError": {
+                "value": { "code": 0, "message": "Required fields are missing", "data": null }
+              }
+            }
+          }
+        }
+      },
+      "UnauthorizedResponse": {
+        "description": "Missing or invalid API key/token",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiResponse" },
+            "examples": {
+              "missingToken": {
+                "value": { "code": 0, "message": "Token missing" }
+              },
+              "invalidApiKey": {
+                "value": { "code": -1, "message": "Unauthorized" }
+              }
+            }
+          }
+        }
+      },
+      "ServerErrorResponse": {
+        "description": "Unexpected server error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiResponse" },
+            "example": { "code": 0, "message": "An error occurred" }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "api-key",
+        "description": "Required by api-key middleware for protected routes."
+      },
+      "tokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "token",
+        "description": "Bearer token used by token middleware. You can also send it in the Authorization header as 'Bearer <token>'."
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 1 },
+          "message": { "type": "string", "example": "Success!" },
+          "data": { "nullable": true }
+        },
+        "required": ["code", "message"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "country_code": { "type": "string", "example": "+91" },
+          "mobile_number": { "type": "string", "example": "9510447952" },
+          "password": { "type": "string", "example": "123456" },
+          "social_id": { "type": "string", "example": "social_123" },
+          "login_type": { "type": "string", "enum": ["G", "A", "F", "S"] }
+        }
+      },
+      "AddAddressRequest": {
+        "type": "object",
+        "required": ["user_id", "name", "address_line_1", "city", "state", "country", "postal_code"],
+        "properties": {
+          "user_id": { "type": "integer", "example": 16 },
+          "name": { "type": "string", "example": "Sahil" },
+          "company_name": { "type": "string", "nullable": true },
+          "address_line_1": { "type": "string", "example": "Palm Street" },
+          "address_line_2": { "type": "string", "nullable": true },
+          "latitude": { "type": "string", "nullable": true },
+          "longitude": { "type": "string", "nullable": true },
+          "city": { "type": "string", "example": "Ahmedabad" },
+          "state": { "type": "string", "example": "Gujarat" },
+          "country": { "type": "string", "example": "India" },
+          "postal_code": { "type": "string", "example": "380001" },
+          "is_default": { "type": "integer", "example": 1 }
+        }
+      },
+      "ValidateUserRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "sahil@example.com"
+          },
+          "mobile_number": {
+            "type": "string",
+            "example": "9510447952"
+          },
+          "country_code": {
+            "type": "string",
+            "example": "+91"
+          },
+          "social_id": {
+            "type": "string",
+            "example": "social_12345"
+          },
+          "login_type": {
+            "type": "string",
+            "enum": [
+              "G",
+              "A",
+              "F",
+              "S"
+            ],
+            "example": "G"
+          },
+          "name": {
+            "type": "string",
+            "example": "Sahil"
+          }
+        },
+        "additionalProperties": false,
+        "description": "All fields are optional in implementation; provide one of: email OR (country_code + mobile_number) OR (social_id + login_type)."
+      },
+      "RequestOtpRequest": {
+        "type": "object",
+        "properties": {
+          "country_code": { "type": "string", "example": "+91" },
+          "mobile_number": { "type": "string", "example": "9510447952" },
+          "email": { "type": "string", "format": "email" },
+          "type": { "type": "string", "example": "s" },
+          "otp_purpose": { "type": "string", "example": "signup" }
+        }
+      },
+      "VerifyOtpRequest": {
+        "type": "object",
+        "required": ["otp"],
+        "properties": {
+          "country_code": { "type": "string", "example": "+91" },
+          "mobile_number": { "type": "string", "example": "9510447952" },
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string", "example": "Sahil" },
+          "password": { "type": "string", "example": "123456" },
+          "login_type": { "type": "string", "enum": ["G", "A", "F", "S"] },
+          "language": { "type": "string", "example": "en" },
+          "otp": { "type": "integer", "example": 1234 }
+        }
+      },
+      "ForgetPasswordRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "sahil@example.com" }
+        }
+      },
+      "VerifyForgetPasswordOtpRequest": {
+        "type": "object",
+        "required": ["email", "otp"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "sahil@example.com" },
+          "otp": { "type": "integer", "example": 1234 },
+          "new_password": { "type": "string", "example": "NewPassword@123" }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["email", "new_password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "sahil@example.com" },
+          "new_password": { "type": "string", "example": "NewPassword@123" }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "required": ["user_id"],
+        "properties": {
+          "user_id": { "type": "integer", "example": 16 },
+          "profile_image": { "type": "string", "example": "https://example.com/profile.jpg" },
+          "is_skip": { "type": "integer", "example": 0 }
+        }
+      },
+      "SetProfileRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "example": "Sahil" },
+          "email": { "type": "string", "format": "email", "example": "sahil@example.com" },
+          "country_code": { "type": "string", "example": "+91" },
+          "phone": { "type": "string", "example": "9510447952" },
+          "profile_image": { "type": "string", "example": "https://example.com/profile.jpg" }
+        }
+      },
+      "SetLanguageRequest": {
+        "type": "object",
+        "required": ["language"],
+        "properties": {
+          "language": { "type": "string", "enum": ["en", "ar"], "example": "en" }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["old_password", "new_password"],
+        "properties": {
+          "old_password": { "type": "string", "example": "OldPassword@123" },
+          "new_password": { "type": "string", "example": "NewPassword@123" }
+        }
+      },
+      "CartManageRequest": {
+        "type": "object",
+        "required": ["product_id", "quantity"],
+        "properties": {
+          "product_id": { "type": "integer", "example": 1 },
+          "size_id": { "type": "integer", "nullable": true },
+          "color_id": { "type": "integer", "nullable": true },
+          "type_id": { "type": "integer", "nullable": true },
+          "quantity": { "type": "integer", "example": 1 }
+        }
+      },
+      "CartRemoveRequest": {
+        "type": "object",
+        "properties": {
+          "product_id": { "type": "integer", "example": 1 },
+          "variant_id": { "type": "integer", "example": 10 },
+          "quantity": { "type": "integer", "example": 0 }
+        }
+      },
+      "AddPaymentMethodRequest": {
+        "type": "object",
+        "required": ["card_number", "payment_mode"],
+        "properties": {
+          "holder_name": { "type": "string", "example": "Sahil" },
+          "card_number": { "type": "string", "example": "4111111111111111" },
+          "expiry_date": { "type": "string", "example": "12/29" },
+          "payment_mode": { "type": "string", "example": "card" },
+          "upi_id": { "type": "string", "nullable": true },
+          "cvv": { "type": "string", "nullable": true }
+        }
+      },
+      "PlaceOrderRequest": {
+        "type": "object",
+        "properties": {
+          "user_latitude": { "type": "string", "nullable": true },
+          "user_longitude": { "type": "string", "nullable": true },
+          "user_location": { "type": "string", "nullable": true },
+          "subtotal": { "type": "number", "example": 120.5 },
+          "tax": { "type": "number", "example": 5 },
+          "discount": { "type": "number", "example": 2 },
+          "total": { "type": "number", "example": 123.5 },
+          "payment_mode": { "type": "string", "example": "card" },
+          "payment_card_number": { "type": "string", "nullable": true },
+          "payment_id": { "type": "integer", "nullable": true }
+        }
+      },
+      "FavouriteRequest": {
+        "type": "object",
+        "required": ["product_id"],
+        "properties": {
+          "product_id": { "type": "integer", "example": 1 }
+        }
+      },
+      "AddRatingRequest": {
+        "type": "object",
+        "required": ["product_id", "rating"],
+        "properties": {
+          "product_id": { "type": "integer", "example": 1 },
+          "rating": { "type": "integer", "minimum": 1, "maximum": 5, "example": 5 },
+          "review": { "type": "string", "nullable": true }
+        }
+      },
+      "CancelOrderRequest": {
+        "type": "object",
+        "properties": {
+          "order_id": { "type": "integer", "example": 101 },
+          "order_code": { "type": "string", "example": "ORD-1713091200000-123" }
+        }
+      },
+      "SetAddressRequest": {
+        "type": "object",
+        "required": ["address_id"],
+        "properties": {
+          "address_id": { "type": "integer", "example": 3 }
+        }
+      },
+      "UpdateAddressRequest": {
+        "type": "object",
+        "required": ["address_id"],
+        "properties": {
+          "address_id": { "type": "integer", "example": 3 },
+          "name": { "type": "string", "example": "Sahil" },
+          "address_line_1": { "type": "string", "example": "Flat 302" },
+          "address_line_2": { "type": "string", "nullable": true },
+          "city": { "type": "string", "example": "Ahmedabad" },
+          "state": { "type": "string", "example": "Gujarat" },
+          "country": { "type": "string", "example": "India" },
+          "postal_code": { "type": "string", "example": "380015" },
+          "latitude": { "type": "string", "nullable": true },
+          "longitude": { "type": "string", "nullable": true }
+        }
+      },
+      "DeleteAddressRequest": {
+        "type": "object",
+        "required": ["address_id"],
+        "properties": {
+          "address_id": { "type": "integer", "example": 3 }
+        }
+      },
+      "DecryptedResponseExample": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 1
+          },
+          "message": {
+            "type": "string",
+            "example": "rest_keywords_success"
+          },
+          "data": {
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

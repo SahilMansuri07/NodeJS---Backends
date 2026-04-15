@@ -11,8 +11,6 @@ const { interestRoute, manageUserRoute, managetypeRoutes, manageMerchRoutes, vou
 const { merchRoutes , notificationRoutes , cmsRoutes } = require("./routes/v1/user.routes.js")
 const { encryption, decryption  } = require("./utils/middelware.js")
 
-
-
 dotenv.config()
 
 const PORT = process.env.PORT

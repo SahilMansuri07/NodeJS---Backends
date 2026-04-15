@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CryptoJS Encryption & Decryption</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f7fc;
+        padding: 20px;
+        margin: 0;
+        color: #333;
+      }
+
+      h1 {
+        text-align: center;
+        color: #4a4a4a;
+        margin-bottom: 40px;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      }
+
+      textarea {
+        width: 100%;
+        padding: 12px;
+        font-size: 14px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        margin-bottom: 20px;
+        box-sizing: border-box;
+        height: 150px;
+        resize: vertical;
+        outline: none;
+      }
+
+      textarea:focus {
+        border-color: #9c8cc3;
+      }
+
+      button {
+        background-color: #9c8cc3;
+        color: #fff;
+        font-weight: bold;
+        padding: 12px 20px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      button:hover {
+        background-color: #7e6eaa;
+      }
+
+      .box {
+        margin-top: 30px;
+        padding: 20px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background-color: #fafafa;
+      }
+
+      .buttons-container {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 20px;
+      }
+
+      .copy-paste-btns {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .copy-button {
+        background-color: #4caf50;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .copy-button:hover {
+        background-color: #45a049;
+      }
+
+      .copy-button:active {
+        background-color: #3e8e41;
+      }
+
+      .copy-button:focus {
+        outline: none;
+      }
+
+      pre {
+        margin: 0;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      .json-key {
+        color: #007bff;
+        font-weight: bold;
+      }
+
+      .json-value {
+        color: #9e6e43;
+      }
+
+      .json-boolean {
+        color: #28a745;
+      }
+
+      .json-null {
+        color: #dc3545;
+      }
+
+      .json-number {
+        color: #fd7e14;
+      }
+
+      .json-string {
+        color: #6f42c1;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 20px;
+        }
+
+        .buttons-container {
+          flex-direction: column;
+        }
+
+        textarea {
+          font-size: 12px;
+          height: 120px;
+        }
+
+        .copy-paste-btns {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        button {
+          width: 100%;
+          margin-bottom: 10px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>CryptoJS Encryption & Decryption</h1>
+
+      <label for="plaintext">Plaintext:</label>
+      <textarea
+        id="plaintext"
+        placeholder="Enter text to encrypt or decrypt"
+      ></textarea>
+
+      <div class="buttons-container">
+        <button onclick="encrypt()">Encrypt</button>
+        <button onclick="decrypt()">Decrypt</button>
+      </div>
+
+      <div class="box">
+        <h3>Encrypted Data:</h3>
+        <div id="encryptedData"></div>
+        <div class="copy-paste-btns">
+          <button id="copyEncryptedBtn" class="copy-button">Copy</button>
+          <button onclick="pasteEncrypted()" class="copy-button">Paste</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Decrypted Data:</h3>
+        <div id="decryptedData"></div>
+        <div class="copy-paste-btns">
+          <button id="copyDecryptedBtn" class="copy-button">Copy</button>
+          <button onclick="pasteDecrypted()" class="copy-button">Paste</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="crypto-js.js"></script>
+    <script>
+      // Convert a hex-encoded string to a WordArray object
+      function parseHexToWordArray(hexString) {
+        return CryptoJS.enc.Utf8.parse(hexString);
+      }
+
+      // Encrypt plaintext using AES with a given key and IV
+      function encryptWithAES(plaintext, key, iv) {
+        if (typeof plaintext === "object") {
+          plaintext = JSON.stringify(plaintext);
+        }
+        return CryptoJS.AES.encrypt(plaintext, key, { iv: iv }).toString();
+      }
+
+      // Decrypt ciphertext using AES with a given key and IV
+      function decryptWithAES(ciphertext, key, iv) {
+        ciphertext = ciphertext.replace(/"/g, "");
+
+        const decryptedBytes = CryptoJS.AES.decrypt(ciphertext, key, {
+          iv: iv,
+        });
+        const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        return decryptedData;
+      }
+
+      function encrypt() {
+        document.getElementById("decryptedData").innerText = "";
+        const plaintext = document.getElementById("plaintext").value;
+        const encryptionKey = CryptoJS.enc.Utf8.parse(
+          "sahilmansurifghmcfagsrhtbshayrth",
+        ); // 128-bit key in hex
+        const iv = CryptoJS.enc.Utf8.parse("sahilmansurifghm"); // 128-bit IV in hex
+
+        const encryptedData = encryptWithAES(plaintext, encryptionKey, iv);
+        document.getElementById("encryptedData").innerText = encryptedData;
+      }
+
+      function decrypt() {
+        document.getElementById("encryptedData").innerText = "";
+        let encryptedData = document.getElementById("plaintext").value;
+        const encryptionKey = CryptoJS.enc.Utf8.parse(
+          "sahilmansurifghmcfagsrhtbshayrth",
+        ); // Same key as used for encryption
+        const iv = CryptoJS.enc.Utf8.parse("sahilmansurifghm"); // Same IV as used for encryption
+
+        // Extract data field if response is wrapped in { data: encryptedString }
+        try {
+          const parsedResponse = JSON.parse(encryptedData);
+          if (parsedResponse.data) {
+            encryptedData = parsedResponse.data;
+          }
+        } catch (e) {
+          // Not JSON, continue with raw ciphertext
+        }
+
+        const decryptedData = decryptWithAES(encryptedData, encryptionKey, iv);
+
+        let decryptedJson;
+        let output = "";
+        try {
+          decryptedJson = JSON.parse(decryptedData);
+          output = syntaxHighlight(decryptedJson);
+          document.getElementById("decryptedData").innerHTML =
+            `<pre>${output}</pre>`;
+        } catch (error) {
+          document.getElementById("decryptedData").innerHTML =
+            `<pre>${decryptedData}</pre>`;
+        }
+      }
+
+      function syntaxHighlight(json) {
+        if (typeof json != "string") {
+          json = JSON.stringify(json, undefined, 2);
+        }
+        json = json.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+        return json.replace(
+          /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+          function (match) {
+            var cls = "json-value";
+            if (/^"/.test(match)) {
+              if (/:$/.test(match)) {
+                cls = "json-key";
+              } else {
+                cls = "json-value";
+              }
+            } else if (/true|false/.test(match)) {
+              cls = "json-boolean";
+            } else if (/null/.test(match)) {
+              cls = "json-null";
+            } else if (/^\d+$/.test(match)) {
+              cls = "json-number";
+            }
+            return `<span class="${cls}">${match}</span>`;
+          },
+        );
+      }
+
+      // Clipboard functionality
+      function copyToClipboard(text) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+
+      // Copy Encrypted Data
+      document
+        .getElementById("copyEncryptedBtn")
+        .addEventListener("click", function () {
+          const encryptedData =
+            document.getElementById("encryptedData").innerText;
+          copyToClipboard(encryptedData);
+        });
+
+      // Copy Decrypted Data
+      document
+        .getElementById("copyDecryptedBtn")
+        .addEventListener("click", function () {
+          const decryptedData =
+            document.getElementById("decryptedData").innerText;
+          copyToClipboard(decryptedData);
+        });
+
+      // Paste Encrypted Data
+      function pasteEncrypted() {
+        navigator.clipboard.readText().then((text) => {
+          document.getElementById("plaintext").value = text;
+        });
+      }
+
+      // Paste Decrypted Data
+      function pasteDecrypted() {
+        navigator.clipboard.readText().then((text) => {
+          document.getElementById("plaintext").value = text;
+        });
+      }
+    </script>
+  </body>
+</html>

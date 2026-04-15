@@ -126,7 +126,7 @@ const checkToken = async function (req, res, next) {
         req.loginUser = false;
 
         const token = req.headers['token'] || req.headers['authorization']  ;
-       console.log(token)
+       console.log(token)  
         if (!token) {
             return res.status(401).json({ message: "Token missing" });
         }

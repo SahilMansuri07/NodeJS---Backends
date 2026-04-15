@@ -81,7 +81,7 @@ const common = {
             const token   = jwt.sign(payload, process.env.JWT_WEB_TOKEN, { expiresIn: "365d" });
                 console.log("payload " , user_id)
             const { device_token , device_type, device_name, device_model, os_version, uuid, ip } = req?.body || {};
-
+ 
             const [checkDevice] = await db.query(
                 `SELECT id FROM tbl_user_device WHERE user_id = ? AND uuid = ?`,
                 [user_id, uuid]
