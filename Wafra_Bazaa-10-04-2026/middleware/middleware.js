@@ -8,6 +8,7 @@ import CryptoJS from "crypto-js";
 import jwt from "jsonwebtoken";
 import common from "../config/common.js";
 import db from "../config/db.js";
+import e from "express";
 dotenv.config();
 
 local
@@ -27,8 +28,9 @@ const bypassRoutes = [
     "/api/v1/auth/forget-password",
     "/api/v1/auth/verify-forget-password-otp",
     "/api/v1/auth/reset-password",
-    "/api/v1/auth/update-profile",
     "/api/v1/auth/logout",
+    "/api/v1/user/faq-listing",
+    "/api/v1/user/contact-us",
 ]
 
 const resolveMessage = (responseMessage) => {
@@ -229,7 +231,7 @@ async function tokenMiddleware (req, res, next) {
         }
 
         if (device[0] && device[0][0] && device[0][0].id) {
-            const user = await common.getUser(device[0][0].id)
+            const user = await common.getUserDetails(device[0][0].id)
             // console.log(user)
             if (user.is_active == 0 || user.is_delete == 1) {
                 return sendApiResponse(res, Codes.SUCCESS , Codes.UNAUTHORIZED, "rest_keywords_unauthorized", null);

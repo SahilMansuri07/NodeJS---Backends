@@ -2,6 +2,7 @@ import middleware from "../../../../middleware/middleware.js";
 import STATUS_CODES from "../../../../config/status_codes.js";
 import common from "../../../../config/common.js";
 import db from "../../../../config/db.js";
+import query from "../../../../config/dbHelper.js";
 
 const parseBoolean = (value) => {
   if (typeof value === "boolean") {
@@ -17,27 +18,50 @@ const parseBoolean = (value) => {
   return ["1", "true", "yes", "y"].includes(normalized);
 };
 
+const buildSavedProductJoin = (userId) => {
+  if (!userId) {
+    return {
+      joinSql: "",
+      joinParams: [],
+      savedFlagSql: "0 AS is_saved",
+    };
+  }
+
+  return {
+    joinSql: `LEFT JOIN (
+        SELECT product_id
+        FROM tbl_product_favourites
+        WHERE user_id = ? AND is_active = 1 AND is_delete = 0
+        GROUP BY product_id
+      ) saved_product ON saved_product.product_id = p.id`,
+    joinParams: [userId],
+    savedFlagSql: "CASE WHEN saved_product.product_id IS NULL THEN 0 ELSE 1 END AS is_saved",
+  };
+};
+
 const userModule = {
-  // Fetch platform offers/banners
-  async getPlatformOffers() {
-    try {
-      const sql = `SELECT id, image, discount_type, discount_amount 
-                        FROM tbl_platform_offer 
-                        WHERE is_active = 1 AND is_delete = 0 
-                        ORDER BY created_at DESC 
-                        LIMIT 5`;
-      const offers = await db.query(sql);
-      return offers || [];
-    } catch (error) {
-      console.error("Error fetching platform offers:", error);
-      return [];
-    }
+    // Fetch platform offers/banners
+    async getPlatformOffers() {
+      try {
+        const sql = `SELECT id, image, discount_type, discount_amount 
+                          FROM tbl_platform_offer 
+                          WHERE is_active = 1 AND is_delete = 0 
+                          ORDER BY created_at DESC 
+                          LIMIT 5`;
+        const [offers] = await db.query(sql);
+        return offers || [];
+      } catch (error) {
+        console.error("Error fetching platform offers:", error);
+        return [];
+      }
   },
 
   // Fetch store listing with average ratings
-  async fetchStoreListing() {
+  async fetchStoreListing(request = null) {
     try {
-      console.log("Fetching store listing with average ratings");
+      // console.log("Fetching store listing with average ratings");
+      const rawSearch = request?.query?.search;
+      const search = rawSearch ? String(rawSearch).trim() : null;
       const sql = `SELECT 
                 s.id, 
                 s.name, 
@@ -47,10 +71,11 @@ const userModule = {
             FROM tbl_store s
             LEFT JOIN tbl_store_rating sr ON s.id = sr.store_id AND sr.is_active = 1 AND sr.is_delete = 0
             WHERE s.is_active = 1 AND s.is_delete = 0
+            ${search ? "AND s.name LIKE ?" : ""}
             GROUP BY s.id, s.name, s.image_url, s.description
             ORDER BY average_rating DESC
             LIMIT 6`;
-      const stores = await db.query(sql);
+      const [stores] = await db.query(sql, search ? [`%${search}%`] : []);
       return stores || [];
     } catch (error) {
       console.error("Error fetching store listing:", error);
@@ -70,7 +95,7 @@ const userModule = {
             WHERE is_active = 1 AND is_delete = 0
             ORDER BY parent_category_id IS NOT NULL, parent_category_id ASC, name ASC`;
 
-      const rows = await db.query(sql);
+      const [rows] = await db.query(sql);
       const mainCategories = (rows || [])
         .filter((item) => item.parent_category_id === null)
         .map((category) => ({
@@ -96,48 +121,186 @@ const userModule = {
     }
   },
 
-  // Fetch top deals (products with discounts)
-  async getTopDeals() {
+  async contactUs(request, res) {
     try {
+      const { title, email, message } = request.body || {};
+
+      const [insertResult] = await query.insertQuery("tbl_contact_us", {
+        title: String(title || "").trim(),
+        email: String(email || "").trim(),
+        message: String(message || "").trim(),
+        status: "pending",
+        is_active: 1,
+        is_delete: 0,
+      });
+
+      if (insertResult && insertResult.affectedRows > 0) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_SUCCESS,
+          "rest_contact_us_submitted_successfully",
+          null,
+        );
+      }
+
+      return middleware.sendApiResponse(
+        res,
+        STATUS_CODES.SUCCESS,
+        STATUS_CODES.RESPONSE_ERROR,
+        "rest_contact_us_submit_error",
+        null,
+      );
+    } catch (error) {
+      console.error("Error submitting contact us:", error);
+      return middleware.sendApiResponse(
+        res,
+        STATUS_CODES.INTERNAL_ERROR,
+        STATUS_CODES.RESPONSE_ERROR,
+        "rest_contact_us_submit_error",
+        null,
+      );
+    }
+  },
+
+  async getFaqListing(filters = {}) {
+    try {
+      
+      const { search, page = 1, limit = 10 } = filters;
+      const safePage = Math.max(Number(page) || 1, 1);
+      const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 100);
+      const offset = (safePage - 1) * safeLimit;
+
+      const whereConditions = ["is_active = 1", "is_delete = 0"];
+      const queryParams = [];
+
+      if (search) {
+        whereConditions.push("(question LIKE ? OR answer LIKE ?)");
+        const searchTerm = `%${String(search).trim()}%`;
+        queryParams.push(searchTerm, searchTerm);
+      }
+
+      const countSql = `SELECT COUNT(*) AS total FROM tbl_faq WHERE ${whereConditions.join(" AND ")}`;
+      const [countResult] = await db.query(countSql, queryParams);
+      const totalItems = countResult[0]?.total || 0;
+
+      const sql = `SELECT
+                id,
+                question,
+                answer
+            FROM tbl_faq
+            WHERE ${whereConditions.join(" AND ")}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?`;
+
+      const [rows] = await db.query(sql, [...queryParams, safeLimit, offset]);
+
+      
+      return {
+        items: rows || [],
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total: totalItems,
+          total_pages: Math.ceil(totalItems / safeLimit),
+        },
+      };
+
+    } catch (error) {
+      console.error("Error fetching faq listing:", error);
+      return {
+        items: [],
+        pagination: {
+          page: Math.max(Number(filters?.page) || 1, 1),
+          limit: Math.min(Math.max(Number(filters?.limit) || 10, 1), 100),
+          total: 0,
+          total_pages: 0,
+        },
+      };
+    }
+  },
+
+  async faqListing(request, res) {
+    try {
+      const result = await this.getFaqListing(request.query || {});
+
+      if (!result.items || result.items.length === 0) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.NO_DATA_FOUND,
+          "rest_no_data_found",
+          result,
+        );
+      }
+
+      return middleware.sendApiResponse(
+        res,
+        STATUS_CODES.SUCCESS,
+        STATUS_CODES.RESPONSE_SUCCESS,
+        "Faqs_fetched_successfully",
+        result,
+      );
+    } catch (error) {
+      console.error("Error fetching faq listing:", error);
+      return middleware.sendApiResponse(
+        res,
+        STATUS_CODES.INTERNAL_ERROR,
+        STATUS_CODES.RESPONSE_ERROR,
+        "Faqs_fetch_error",
+        null,
+      );
+    }
+  },
+
+  // Fetch top deals (products with discounts)
+  async getTopDeals(userId = null) {
+    try {
+      const savedProductJoin = buildSavedProductJoin(userId);
       const sql = `SELECT 
                 p.id, 
                 p.name,
                 p.base_price as price,
                 MIN(pi.image_url) as image,
                 MAX(pd.discount_value) as discount_value,
-                MAX(pd.discount_type) as discount_type
+                MAX(pd.discount_type) as discount_type,
+                ${savedProductJoin.savedFlagSql}
             FROM tbl_product p
             LEFT JOIN tbl_product_image pi ON p.id = pi.product_id AND pi.is_active = 1 AND pi.is_delete = 0
             INNER JOIN tbl_product_discount pd ON p.id = pd.product_id AND pd.is_active = 1 AND pd.is_delete = 0
+            ${savedProductJoin.joinSql}
             WHERE p.is_active = 1 AND p.is_delete = 0
             GROUP BY p.id, p.name, p.base_price
             ORDER BY p.created_at DESC
             LIMIT 6`;
-      const deals = await db.query(sql);
+      const [deals] = await db.query(sql, savedProductJoin.joinParams);
       return deals || [];
     } catch (error) {
       console.error("Error fetching top deals:", error);
       return [];
     }
   },
-
+ 
   // Fetch trending products (sorted by rating)
-  async getTrendingProducts() {
+  async getTrendingProducts(userId = null) {
     try {
+      const savedProductJoin = buildSavedProductJoin(userId);
       const sql = `SELECT 
                 p.id, 
                 p.name,
                 p.base_price as price,
                 MIN(pi.image_url) as image,
-                COALESCE(AVG(pr.rating), 0) as average_rating
+                COALESCE(AVG(pr.rating), 0) as average_rating,
+                ${savedProductJoin.savedFlagSql}
             FROM tbl_product p
             LEFT JOIN tbl_product_image pi ON p.id = pi.product_id AND pi.is_active = 1 AND pi.is_delete = 0
             LEFT JOIN tbl_product_rating pr ON p.id = pr.product_id AND pr.is_active = 1 AND pr.is_delete = 0
+            ${savedProductJoin.joinSql}
             WHERE p.is_active = 1 AND p.is_delete = 0
             GROUP BY p.id, p.name, p.base_price
             ORDER BY average_rating DESC
             LIMIT 6`;
-      const trending = await db.query(sql);
+      const [trending] = await db.query(sql, savedProductJoin.joinParams);
       return trending || [];
     } catch (error) {
       console.error("Error fetching trending products:", error);
@@ -146,12 +309,13 @@ const userModule = {
   },
 
   // Simplified product search with category filter for homepage
-  async getFilteredProducts(filters = {}) {
+  async getFilteredProducts(filters = {}, userId = null) {
     const { search, category_id, page = 1, limit = 12 } = filters;
 
     const safePage = Math.max(Number(page) || 1, 1);
     const safeLimit = Math.min(Math.max(Number(limit) || 12, 1), 100);
     const offset = (safePage - 1) * safeLimit;
+    const savedProductJoin = buildSavedProductJoin(userId);
 
     // Build WHERE clause conditions
     let whereConditions = ["p.is_active = 1", "p.is_delete = 0"];
@@ -163,8 +327,18 @@ const userModule = {
     }
 
     if (category_id) {
-      whereConditions.push("p.category_id = ?");
-      queryParams.push(Number(category_id));
+      whereConditions.push(`(
+        p.category_id = ?
+        OR p.category_id IN (
+          SELECT c.id
+          FROM tbl_category c
+          WHERE c.parent_category_id = ?
+            AND c.is_active = 1
+            AND c.is_delete = 0
+        )
+      )`);
+      const normalizedCategoryId = Number(category_id);
+      queryParams.push(normalizedCategoryId, normalizedCategoryId);
     }
 
     // Base SQL query
@@ -174,24 +348,26 @@ const userModule = {
             p.description,
             p.base_price as price,
             MIN(pi.image_url) as image,
-            COALESCE(AVG(pr.rating), 0) as average_rating
+        COALESCE(AVG(pr.rating), 0) as average_rating,
+        ${savedProductJoin.savedFlagSql}
         FROM tbl_product p
         LEFT JOIN tbl_product_image pi ON p.id = pi.product_id AND pi.is_active = 1 AND pi.is_delete = 0
         LEFT JOIN tbl_product_rating pr ON p.id = pr.product_id AND pr.is_active = 1 AND pr.is_delete = 0
+      ${savedProductJoin.joinSql}
         WHERE ${whereConditions.join(" AND ")}
         GROUP BY p.id, p.name, p.description, p.base_price
         ORDER BY p.created_at DESC`;
 
     // Count total rows
     const countSql = `SELECT COUNT(DISTINCT p.id) as total FROM tbl_product p WHERE ${whereConditions.join(" AND ")}`;
-    const countResult = await db.query(countSql, queryParams);
+    const [countResult] = await db.query(countSql, queryParams);
     const totalItems = countResult[0]?.total || 0;
 
     // Get paginated results
     sql += ` LIMIT ? OFFSET ?`;
     queryParams.push(safeLimit, offset);
 
-    const products = await db.query(sql, queryParams);
+    const [products] = await db.query(sql, [...savedProductJoin.joinParams, ...queryParams]);
 
     return {
       items: products || [],
@@ -206,7 +382,8 @@ const userModule = {
 
   async products(request, res) {
     try {
-      const result = await this.getFilteredProducts(request.query || {});
+      const userId = request.loginUser?.id || request.loginUser?.data?.id || null;
+      const result = await this.getFilteredProducts(request.query || {}, userId);
 
       if (!result.items || result.items.length === 0) {
         return middleware.sendApiResponse(
@@ -240,6 +417,7 @@ const userModule = {
   // Simple filter API for search-result screen
   async filterProducts(request, res) {
     try {
+      const userId = request.loginUser?.id || request.loginUser?.data?.id || null;
       const {
         search,
         category_id,
@@ -290,11 +468,16 @@ const userModule = {
                 MAX(pd.discount_value) AS discount_value,
                 p.category_id,
                 c.name AS category_name,
-                c.parent_category_id
+            c.parent_category_id,
+            ${buildSavedProductJoin(userId).savedFlagSql}
             FROM tbl_product p
             LEFT JOIN tbl_category c ON p.category_id = c.id
             LEFT JOIN tbl_product_image pi ON p.id = pi.product_id AND pi.is_active = 1 AND pi.is_delete = 0
             LEFT JOIN tbl_product_rating pr ON p.id = pr.product_id AND pr.is_active = 1 AND pr.is_delete = 0`;
+
+      const savedProductJoin = buildSavedProductJoin(userId);
+      sql += `
+        ${savedProductJoin.joinSql}`;
 
       if (discountOnly) {
         sql += ` INNER JOIN tbl_product_discount pd ON p.id = pd.product_id AND pd.is_active = 1 AND pd.is_delete = 0`;
@@ -319,7 +502,7 @@ const userModule = {
 
       sql += ` ORDER BY ${orderBy}`;
 
-      const items = await db.query(sql, queryParams);
+      const [items] = await db.query(sql, [...savedProductJoin.joinParams, ...queryParams]);
       const categories = await this.getCategoryListing();
 
       const responseData = {
@@ -416,6 +599,8 @@ const userModule = {
       const sizeId = request.query?.size_id
         ? Number(request.query.size_id)
         : null;
+      const userId = request.loginUser?.id || request.loginUser?.data?.id || null;
+      const savedProductJoin = buildSavedProductJoin(userId);
 
       if (!Number.isInteger(productId) || productId <= 0) {
         return middleware.sendApiResponse(
@@ -442,16 +627,18 @@ const userModule = {
                 COALESCE(AVG(pr.rating), 0) AS average_rating,
                 COUNT(pr.id) AS total_reviews,
                 MAX(pd.discount_type) AS discount_type,
-                MAX(pd.discount_value) AS discount_value
+            MAX(pd.discount_value) AS discount_value,
+            ${savedProductJoin.savedFlagSql}
             FROM tbl_product p
             LEFT JOIN tbl_category c ON p.category_id = c.id
             LEFT JOIN tbl_store s ON p.store_id = s.id
             LEFT JOIN tbl_product_rating pr ON p.id = pr.product_id AND pr.is_active = 1 AND pr.is_delete = 0
             LEFT JOIN tbl_product_discount pd ON p.id = pd.product_id AND pd.is_active = 1 AND pd.is_delete = 0
+          ${savedProductJoin.joinSql}
             WHERE p.id = ? AND p.is_active = 1 AND p.is_delete = 0
             GROUP BY p.id, p.name, p.description, p.additional_info, p.base_price, p.category_id, c.name, p.store_id, s.name, s.description, s.image_url`;
 
-      const productRows = await db.query(productSql, [productId]);
+        const [productRows] = await db.query(productSql, [...savedProductJoin.joinParams, productId]);
       if (!productRows || productRows.length === 0) {
         return middleware.sendApiResponse(
           res,
@@ -478,7 +665,7 @@ const userModule = {
             FROM tbl_product_image
             WHERE product_id = ? AND is_active = 1 AND is_delete = 0
             ORDER BY id ASC`;
-      const images = await db.query(imageSql, [productId]);
+      const [images] = await db.query(imageSql, [productId]);
 
       let variantSql = `SELECT
                 pv.id,
@@ -503,7 +690,7 @@ const userModule = {
       }
       variantSql += ` ORDER BY pv.id ASC`;
 
-      const variants = await db.query(variantSql, variantParams);
+      const [variants] = await db.query(variantSql, variantParams);
 
       const sizesSql = `SELECT DISTINCT
                 pv.size_id,
@@ -512,7 +699,7 @@ const userModule = {
             LEFT JOIN tbl_size sz ON pv.size_id = sz.id
             WHERE pv.product_id = ? AND pv.is_active = 1 AND pv.is_delete = 0
             ORDER BY pv.size_id ASC`;
-      const availableSizes = await db.query(sizesSql, [productId]);
+      const [availableSizes] = await db.query(sizesSql, [productId]);
 
       const sizeChartSql = `SELECT
                 sc.size_id,
@@ -526,7 +713,7 @@ const userModule = {
             WHERE sc.product_id = ? AND sc.is_active = 1 AND sc.is_delete = 0
             GROUP BY sc.size_id, sz.name
             ORDER BY sc.size_id ASC`;
-      const sizeChartRows = await db.query(sizeChartSql, [productId]);
+      const [sizeChartRows] = await db.query(sizeChartSql, [productId]);
 
       const productData = {
         product: {
@@ -552,6 +739,7 @@ const userModule = {
             discount_type: product.discount_type,
             discount_value: product.discount_value,
           },
+          is_saved: Number(product.is_saved || 0) === 1,
           images: images || [],
           available_sizes: availableSizes || [],
           variants: variants || [],
@@ -615,7 +803,7 @@ const userModule = {
             WHERE p.id = ? AND p.is_active = 1 AND p.is_delete = 0
             GROUP BY p.id, p.name, p.base_price`;
 
-      const productRows = await db.query(productSql, [productId]);
+      const [productRows] = await db.query(productSql, [productId]);
       if (!productRows || productRows.length === 0) {
         return middleware.sendApiResponse(
           res,
@@ -629,7 +817,7 @@ const userModule = {
       const totalSql = `SELECT COUNT(*) AS total
                 FROM tbl_product_rating
                 WHERE product_id = ? AND is_active = 1 AND is_delete = 0`;
-      const totalRows = await db.query(totalSql, [productId]);
+      const [totalRows] = await db.query(totalSql, [productId]);
       const totalItems = Number(totalRows[0]?.total || 0);
 
       const reviewSql = `SELECT
@@ -648,7 +836,7 @@ const userModule = {
             ORDER BY pr.created_at DESC
             LIMIT ? OFFSET ?`;
 
-      const reviews = await db.query(reviewSql, [productId, safeLimit, offset]);
+      const [reviews] = await db.query(reviewSql, [productId, safeLimit, offset]);
 
       const reviewData = {
         product: {
@@ -690,11 +878,12 @@ const userModule = {
   // Home API - calls all functions and returns combined response
   async home(request, res) {
     try {
+      const userId = request.loginUser?.id || request.loginUser?.data?.id || null;
       const offers = await this.getPlatformOffers();
       const [stores, topDeals, trendingProducts] = await Promise.all([
-        this.fetchStoreListing(),
-        offers.length > 0 ? this.getTopDeals() : Promise.resolve([]),
-        this.getTrendingProducts(),
+        this.fetchStoreListing(request , res),
+        offers.length > 0 ? this.getTopDeals(userId) : Promise.resolve([]),
+        this.getTrendingProducts(userId),
       ]);
 
       const homeData = {
@@ -740,7 +929,7 @@ const userModule = {
 
   async getStoreListing(request, res) {
     try {
-      const stores = await this.fetchStoreListing();
+      const stores = await this.fetchStoreListing(request);
       // console.log('Fetched stores:', stores);
       if (!stores || stores.length === 0) {
         return middleware.sendApiResponse(
@@ -773,6 +962,8 @@ const userModule = {
   async fetchStoreData(request, res) {
     try {
       const storeId = Number(request.query?.store_id);
+      const userId = request.loginUser?.id || request.loginUser?.data?.id || null;
+      const savedProductJoin = buildSavedProductJoin(userId);
 
       if (!Number.isInteger(storeId) || storeId <= 0) {
         return middleware.sendApiResponse(
@@ -800,7 +991,8 @@ const userModule = {
                 pi.image AS product_image,
                 COALESCE(pr_data.average_rating, 0) AS product_average_rating,
                 pd.discount_type,
-                pd.discount_value
+                pd.discount_value,
+                ${savedProductJoin.savedFlagSql}
             FROM tbl_store s
             LEFT JOIN (
                 SELECT
@@ -837,10 +1029,11 @@ const userModule = {
                 WHERE is_active = 1 AND is_delete = 0
                 GROUP BY product_id
             ) pd ON pd.product_id = p.id
+                    ${savedProductJoin.joinSql}
             WHERE s.id = ? AND s.is_active = 1 AND s.is_delete = 0
             ORDER BY p.created_at DESC`;
 
-      const rows = await db.query(sql, [storeId]);
+                  const [rows] = await db.query(sql, [...savedProductJoin.joinParams, storeId]);
       if (!rows || rows.length === 0) {
         return middleware.sendApiResponse(
           res,
@@ -862,6 +1055,7 @@ const userModule = {
           average_rating: Number(row.product_average_rating || 0),
           discount_type: row.discount_type,
           discount_value: row.discount_value,
+          is_saved: Number(row.is_saved || 0) === 1,
         }));
 
       const responseData = {
@@ -945,8 +1139,8 @@ const userModule = {
         );
       }
 
-      const checkVariantRows = await db.query(
-        `SELECT id, stock FROM tbl_product_variant WHERE product_id=? AND size_id=? AND color_id=? AND type_id=? AND is_active=1 AND is_delete=0`,
+      const [checkVariantRows] = await db.query(
+        `SELECT id, stock , price FROM tbl_product_variant WHERE product_id=? AND size_id=? AND color_id=? AND type_id=? AND is_active=1 AND is_delete=0`,
         [product_id, size_id, color_id, type_id],
       );
       const checkVariant = checkVariantRows?.[0];
@@ -970,10 +1164,10 @@ const userModule = {
           { available_stock: checkVariant.stock },
         );
       }
-
+     
       const variant_id = checkVariant.id;
       //   console.log("Variant ID to add to cart:", variant_id);
-      const isVariantAlreadyInCart = await db.query(
+      const [isVariantAlreadyInCart] = await db.query(
         `SELECT id FROM tbl_cart WHERE user_id=? AND variant_id=? AND is_active=1 AND is_delete=0`,
         [user_id, variant_id],
       );
@@ -982,35 +1176,31 @@ const userModule = {
         let updateCartResult;
 
         if (normalizedQuantity === 0) {
-          updateCartResult = await db.query(
+          [updateCartResult] = await db.query(
             `DELETE FROM tbl_cart WHERE user_id=? AND variant_id=?`,
             [user_id, variant_id],
           );
         } else {
-          updateCartResult = await db.query(
-            `UPDATE tbl_cart SET quantity = ? WHERE user_id=? AND variant_id=? AND is_active=1 AND is_delete=0`,
+          [updateCartResult] = await query.updateQuery(
+            "tbl_cart",
+            "quantity = ?",
+            "user_id=? AND variant_id=? AND is_active=1 AND is_delete=0",
             [normalizedQuantity, user_id, variant_id],
           );
         }
-
+        // console.log("Update cart result for existing variant:", updateCartResult);
         if (updateCartResult && updateCartResult.affectedRows > 0) {
           const userCart = await common.getUserCart(user_id);
+          console.log("Cart updated successfully. Updated cart data:", userCart);
           return middleware.sendApiResponse(
             res,
             STATUS_CODES.SUCCESS,
             STATUS_CODES.RESPONSE_SUCCESS,
             "rest_cart_updated_successfully",
-            { cartData: userCart },
+            { cartData: userCart[0] },
           );
         }
-
-        return middleware.sendApiResponse(
-          res,
-          STATUS_CODES.INTERNAL_ERROR,
-          STATUS_CODES.RESPONSE_ERROR,
-          "rest_keywords_error",
-          { resource: "Updating Cart" },
-        );
+        // console.log("Failed to update cart. Database response:", updateCartResult);
       }
 
       if (normalizedQuantity === 0) {
@@ -1023,10 +1213,14 @@ const userModule = {
         );
       }
 
-      const addToCartResult = await db.query(
-        "INSERT INTO tbl_cart(user_id,variant_id,quantity,is_active,is_delete) VALUES (?,?, ?, 1, 0)",
-        [user_id, variant_id, normalizedQuantity],
-      );
+      const [addToCartResult] = await query.insertQuery("tbl_cart", {
+        user_id,
+        variant_id,
+        quantity: normalizedQuantity,
+        is_active: 1,
+        is_delete: 0,
+      });
+      // console.log("Add to cart result:", addToCartResult);
 
       if (addToCartResult && addToCartResult.affectedRows > 0) {
         const userCart = await common.getUserCart(user_id);
@@ -1035,7 +1229,7 @@ const userModule = {
           STATUS_CODES.SUCCESS,
           STATUS_CODES.RESPONSE_SUCCESS,
           "rest_item_added_to_cart_successfully",
-          { cartData: userCart },
+          { cartData: userCart[0] },
         );
       } else {
         return middleware.sendApiResponse(
@@ -1058,11 +1252,177 @@ const userModule = {
     }
   },
 
-  async cartDetails(request, res) {
+ async cartDetails(request, res) {
+  try {
+    const loginUser = request.loginUser || request.loginUser?.data || {};
+    const user_id = loginUser.id;
+
+    if (!user_id) {
+      return middleware.sendApiResponse(
+        res,
+        STATUS_CODES.UNAUTHORIZED,
+        STATUS_CODES.RESPONSE_ERROR,
+        "rest_keywords_unauthorized",
+        null
+      );
+    }
+
+    const cartItemsSql = `SELECT
+        c.id AS cart_id,
+        c.user_id,
+        c.variant_id,
+        c.quantity,
+        pv.product_id,
+        pv.price AS variant_price,
+        pv.stock,
+        p.name AS product_name,
+        p.base_price,
+        COALESCE(pi.image_url, '') AS product_image,
+        s.id AS size_id,
+        s.name AS size_name,
+        clr.id AS color_id,
+        clr.name AS color_name,
+        tp.id AS type_id,
+        tp.name AS type_name
+    FROM tbl_cart c
+    LEFT JOIN tbl_product_variant pv ON c.variant_id = pv.id
+    LEFT JOIN tbl_product p ON pv.product_id = p.id
+    LEFT JOIN tbl_size s ON pv.size_id = s.id
+    LEFT JOIN tbl_color clr ON pv.color_id = clr.id
+    LEFT JOIN tbl_type tp ON pv.type_id = tp.id
+    LEFT JOIN (
+        SELECT product_id, MIN(image_url) AS image_url
+        FROM tbl_product_image
+        WHERE is_active = 1 AND is_delete = 0
+        GROUP BY product_id
+    ) pi ON pi.product_id = p.id
+    WHERE c.user_id = ?
+      AND c.is_active = 1
+      AND c.is_delete = 0
+      AND pv.is_active = 1
+      AND pv.is_delete = 0
+      AND p.is_active = 1
+      AND p.is_delete = 0
+    ORDER BY c.id DESC`;
+
+    const [rows] = await db.query(cartItemsSql, [user_id]);
+
+    if (!rows.length) {
+      return middleware.sendApiResponse(
+        res,
+        STATUS_CODES.SUCCESS,
+        STATUS_CODES.NO_DATA_FOUND,
+        "rest_no_data_found",
+        {
+          items: [],
+          summary: {
+            total_items: 0,
+            sub_total: 0,
+            total_amount: 0,
+          },
+        }
+      );
+    }
+
+    // Get all product IDs
+    const productIds = [...new Set(rows.map(r => r.product_id))];
+
+    //  Fetch all discounts at once
+    const [discountRows] = await db.query(
+      `SELECT product_id, discount_type, discount_value 
+       FROM tbl_product_discount 
+       WHERE product_id IN (?) 
+       AND is_active = 1 AND is_delete = 0`,
+      [productIds]
+    );
+
+    //  Map discounts
+    const discountMap = {};
+    discountRows.forEach(d => {
+      discountMap[d.product_id] = d;
+    });
+
+    //  Build items
+    const items = rows.map(row => {
+      const quantity = Number(row.quantity || 0);
+      const basePrice = Number(row.variant_price || row.base_price || 0);
+
+      let finalPrice = basePrice;
+      const discount = discountMap[row.product_id];
+
+      if (discount) {
+        if (discount.discount_type === "percentage") {
+          finalPrice -= (basePrice * discount.discount_value) / 100;
+        } else if (discount.discount_type === "flat") {
+          finalPrice -= discount.discount_value;
+        }
+      }
+
+      finalPrice = Math.max(finalPrice, 0); // prevent negative
+
+      return {
+        cart_id: row.cart_id,
+        variant_id: row.variant_id,
+        product_id: row.product_id,
+        product_name: row.product_name,
+        product_image: row.product_image,
+        quantity,
+        unit_price: basePrice,
+        discount_type: discount?.discount_type || null,
+        discount_value: discount?.discount_value || 0,
+        discounted_price: Number(finalPrice.toFixed(2)),
+        item_total: Number((finalPrice * quantity).toFixed(2)),
+        stock: Number(row.stock || 0),
+        size: {
+          id: row.size_id,
+          name: row.size_name,
+        },
+        color: {
+          id: row.color_id,
+          name: row.color_name,
+        },
+        type: {
+          id: row.type_id,
+          name: row.type_name,
+        },
+      };
+    });
+
+    //  Summary
+    const subTotal = items.reduce((sum, i) => sum + i.item_total, 0);
+    const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+
+    return middleware.sendApiResponse(
+      res,
+      STATUS_CODES.SUCCESS,
+      STATUS_CODES.RESPONSE_SUCCESS,
+      "Cart_details_fetched_successfully",
+      {
+        items,
+        summary: {
+          total_items: totalItems,
+          sub_total: Number(subTotal.toFixed(2)),
+          total_amount: Number(subTotal.toFixed(2)),
+        },
+      }
+    );
+
+  } catch (error) {
+    console.error("Error fetching cart details:", error);
+    return middleware.sendApiResponse(
+      res,
+      STATUS_CODES.INTERNAL_ERROR,
+      STATUS_CODES.RESPONSE_ERROR,
+      "rest_keywords_error",
+      null
+    );
+  }
+},
+
+  async redeemVoucher(request, res) {
     try {
       const loginUser = request.loginUser || request.loginUser?.data || {};
       const user_id = loginUser.id;
-      //   const {coupenCode} = request.body
 
       if (!user_id) {
         return middleware.sendApiResponse(
@@ -1074,118 +1434,229 @@ const userModule = {
         );
       }
 
-      const cartItemsSql = `SELECT
-          c.id AS cart_id,
-          c.user_id,
-          c.variant_id,
+      const voucherCode = String(
+        request.body?.voucher_code || request.query?.voucher_code || "",
+      ).trim();
+
+      if (!voucherCode) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.MISSING_FIELD,
+          "rest_keywords_required_fields_missing",
+          { fields: "voucher_code" },
+        );
+      }
+
+      const [voucherRows] = await db.query(
+        `SELECT
+          id,
+          code,
+          discount_type,
+          discount_value,
+          min_order_amount,
+          max_discount,
+          usage_limit,
+          used_count,
+          per_user_limit,
+          start_date,
+          end_date
+         FROM tbl_voucher
+         WHERE code = ? AND is_active = 1 AND is_delete = 0
+         LIMIT 1`,
+        [voucherCode],
+      );
+
+      const voucher = voucherRows?.[0];
+      if (!voucher) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_invalid_voucher",
+          null,
+        );
+      }
+
+      const now = new Date();
+      if (voucher.start_date && new Date(voucher.start_date) > now) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_voucher_not_started",
+          null,
+        );
+      }
+
+      if (voucher.end_date && new Date(voucher.end_date) < now) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_voucher_expired",
+          null,
+        );
+      }
+
+      if (
+        voucher.usage_limit !== null &&
+        Number(voucher.used_count || 0) >= Number(voucher.usage_limit)
+      ) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_voucher_usage_limit_exceeded",
+          null,
+        );
+      }
+
+      const [userRedeemRows] = await db.query(
+        `SELECT COUNT(*) AS total
+         FROM tbl_voucher_redeem
+         WHERE voucher_id = ? AND user_id = ?`,
+        [voucher.id, user_id],
+      );
+
+      const userRedeemCount = Number(userRedeemRows?.[0]?.total || 0);
+      const perUserLimit = Number(voucher.per_user_limit || 0);
+      if (perUserLimit > 0 && userRedeemCount >= perUserLimit) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_voucher_user_limit_exceeded",
+          null,
+        );
+      }
+
+      const [cartItemRows] = await db.query(
+        `SELECT
+          c.id,
           c.quantity,
           pv.product_id,
           pv.price AS variant_price,
-          pv.stock,
-          p.name AS product_name,
-          p.base_price,
-          COALESCE(pi.image_url, '') AS product_image,
-          s.id AS size_id,
-          s.name AS size_name,
-          clr.id AS color_id,
-          clr.name AS color_name,
-          tp.id AS type_id,
-          tp.name AS type_name
-      FROM tbl_cart c
-      LEFT JOIN tbl_product_variant pv ON c.variant_id = pv.id
-      LEFT JOIN tbl_product p ON pv.product_id = p.id
-      LEFT JOIN tbl_size s ON pv.size_id = s.id
-      LEFT JOIN tbl_color clr ON pv.color_id = clr.id
-      LEFT JOIN tbl_type tp ON pv.type_id = tp.id
-      LEFT JOIN (
-          SELECT product_id, MIN(image_url) AS image_url
-          FROM tbl_product_image
-          WHERE is_active = 1 AND is_delete = 0
-          GROUP BY product_id
-      ) pi ON pi.product_id = p.id
-      WHERE c.user_id = ?
-        AND c.is_active = 1
-        AND c.is_delete = 0
-        AND pv.is_active = 1
-        AND pv.is_delete = 0
-        AND p.is_active = 1
-        AND p.is_delete = 0
-      ORDER BY c.id DESC`;
+          p.base_price
+         FROM tbl_cart AS c
+         JOIN tbl_product_variant AS pv ON pv.id = c.variant_id AND pv.is_active = 1 AND pv.is_delete = 0
+         JOIN tbl_product AS p ON p.id = pv.product_id AND p.is_active = 1 AND p.is_delete = 0
+         WHERE c.user_id = ? AND c.is_active = 1 AND c.is_delete = 0`,
+        [user_id],
+      );
 
-      const rows = await db.query(cartItemsSql, [user_id]);
-
-      if (!rows || rows.length === 0) {
+      const cartData = cartItemRows || [];
+      if (!cartData.length) {
         return middleware.sendApiResponse(
           res,
           STATUS_CODES.SUCCESS,
           STATUS_CODES.NO_DATA_FOUND,
           "rest_no_data_found",
+          { resource: "User Cart" },
+        ); 
+      }
+
+      const productIds = [...new Set(cartData.map((item) => item.product_id))];
+      const [discountRows] = await db.query(
+        `SELECT product_id, discount_type, discount_value
+         FROM tbl_product_discount
+         WHERE product_id IN (?)
+           AND is_active = 1
+           AND is_delete = 0`,
+        [productIds],
+      );
+
+      const discountMap = {};
+      (discountRows || []).forEach((row) => {
+        discountMap[row.product_id] = row;
+      });
+
+      const payableSubTotal = Number(
+        cartData
+          .reduce((sum, item) => {
+            const quantity = Number(item.quantity || 0);
+            const basePrice = Number(item.variant_price || item.base_price || 0);
+            const itemDiscount = discountMap[item.product_id];
+            let finalUnitPrice = basePrice;
+
+            if (itemDiscount) {
+              if (itemDiscount.discount_type === "percentage") {
+                finalUnitPrice -=
+                  (basePrice * Number(itemDiscount.discount_value || 0)) / 100;
+              } else if (itemDiscount.discount_type === "flat") {
+                finalUnitPrice -= Number(itemDiscount.discount_value || 0);
+              }
+            }
+
+            finalUnitPrice = Math.max(finalUnitPrice, 0);
+            return sum + finalUnitPrice * quantity;
+          }, 0)
+          .toFixed(2),
+      );
+
+      const minOrderAmount = Number(voucher.min_order_amount || 0);
+      if (payableSubTotal < minOrderAmount) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_voucher_min_order_not_met",
           {
-            items: [],
-            summary: {
-              total_items: 0,
-              sub_total: 0,
-              total_amount: 0,
-            },
+            minimum_order_amount: minOrderAmount,
+            current_order_amount: payableSubTotal,
           },
         );
       }
-      //   if(coupenCode){
-      //     const [fetchData] = await db.query(`SELECT discount_type, discount_value FROM tbl_coupons WHERE code = ? AND is_active = 1 AND is_delete = 0`, [coupenCode]);
-      //   }
-      const items = rows.map((row) => {
-        const unitPrice = Number(row.variant_price || row.base_price || 0);
-        const quantity = Number(row.quantity || 0);
-        return {
-          cart_id: row.cart_id,
-          variant_id: row.variant_id,
-          product_id: row.product_id,
-          product_name: row.product_name,
-          product_image: row.product_image,
-          quantity,
-          unit_price: unitPrice,
-          item_total: Number((unitPrice * quantity).toFixed(3)),
-          stock: Number(row.stock || 0),
-          size: {
-            id: row.size_id,
-            name: row.size_name,
-          },
-          color: {
-            id: row.color_id,
-            name: row.color_name,
-          },
-          type: {
-            id: row.type_id,
-            name: row.type_name,
-          },
-        };
-      });
 
-      const subTotal = items.reduce(
-        (sum, item) => sum + Number(item.item_total || 0),
-        0,
+      let voucherDiscountAmount = 0;
+      if (voucher.discount_type === "percentage") {
+        voucherDiscountAmount =
+          (payableSubTotal * Number(voucher.discount_value || 0)) / 100;
+        if (voucher.max_discount !== null) {
+          voucherDiscountAmount = Math.min(
+            voucherDiscountAmount,
+            Number(voucher.max_discount || 0),
+          );
+        }
+      } else if (voucher.discount_type === "flat") {
+        voucherDiscountAmount = Number(voucher.discount_value || 0);
+      }
+
+      voucherDiscountAmount = Number(
+        Math.min(Math.max(voucherDiscountAmount, 0), payableSubTotal).toFixed(2),
       );
-      const totalItems = items.reduce(
-        (sum, item) => sum + Number(item.quantity || 0),
-        0,
+
+      if (voucherDiscountAmount <= 0) {
+        return middleware.sendApiResponse(
+          res,
+          STATUS_CODES.SUCCESS,
+          STATUS_CODES.RESPONSE_ERROR,
+          "rest_voucher_not_applicable",
+          null,
+        );
+      }
+
+      const finalAmount = Number(
+        Math.max(payableSubTotal - voucherDiscountAmount, 0).toFixed(2),
       );
 
       return middleware.sendApiResponse(
         res,
         STATUS_CODES.SUCCESS,
         STATUS_CODES.RESPONSE_SUCCESS,
-        "Cart_details_fetched_successfully",
+        "rest_voucher_applied_successfully",
         {
-          items,
-          summary: {
-            total_items: totalItems,
-            sub_total: Number(subTotal.toFixed(3)),
-            total_amount: Number(subTotal.toFixed(3)),
-          },
+          voucher_id: voucher.id,
+          voucher_code: voucher.code,
+          discount_type: voucher.discount_type,
+          discount_value: Number(voucher.discount_value || 0),
+          cart_total: payableSubTotal,
+          discount_applied: voucherDiscountAmount,
+          payable_amount: finalAmount,
         },
       );
     } catch (error) {
-      console.error("Error fetching cart details:", error);
+      console.error("Error redeeming voucher:", error);
       return middleware.sendApiResponse(
         res,
         STATUS_CODES.INTERNAL_ERROR,
@@ -1234,7 +1705,7 @@ const userModule = {
         `SELECT id FROM tbl_payment WHERE user_id = ? AND card_number = ? AND is_active = 1 AND is_delete = 0`,
         [user_id, card_number],
       );
-      console.log("Existing payment method check result:", cartexist);
+      // console.log("Existing payment method check result:", cartexist);
       if (cartexist) {
         return middleware.sendApiResponse(
           res,
@@ -1245,17 +1716,17 @@ const userModule = {
         );
       }
 
-      const addPaymentResult = await db.query(
-        `INSERT INTO tbl_payment (user_id, card_holder_name, card_number, card_expiry_date, payment_mode, upi_id, is_active, is_delete) VALUES (?, ?, ?, ?, ?, ?, 1, 0)`,
-        [
-          user_id,
-          holder_name || null,
-          card_number,
-          expiry_date || null,
-          payment_mode,
-          upi_id || null,
-        ],
-      );
+      const [addPaymentResult] = await query.insertQuery("tbl_payment", {
+        user_id,
+        card_holder_name: holder_name || null,
+        card_number,
+        card_expiry_date: expiry_date || null,
+        payment_mode,
+        upi_id: upi_id || null,
+        is_active: 1,
+        is_delete: 0,
+      });
+
       if (addPaymentResult && addPaymentResult.affectedRows > 0) {
         return middleware.sendApiResponse(
           res,
@@ -1304,19 +1775,32 @@ const userModule = {
         user_latitude,
         user_longitude,
         user_location,
-        subtotal,
-        tax = 0,
-        discount = 0,
-        total,
         payment_mode,
         payment_card_name,
         payment_card_numer,
         payment_card_number,
         payment_id,
+        voucher_code,
       } = request.body || {};
 
       const cardNumber = payment_card_number || payment_card_numer || null;
-      const cartData = await common.getUserCart(user_id);
+      const [cartItemRows] = await db.query(
+        `SELECT
+          c.id,
+          c.variant_id,
+          c.quantity,
+          pv.product_id,
+          pv.price AS variant_price,
+          pv.stock,
+          p.base_price
+         FROM tbl_cart AS c
+         JOIN tbl_product_variant AS pv ON pv.id = c.variant_id AND pv.is_active = 1 AND pv.is_delete = 0
+         JOIN tbl_product AS p ON p.id = pv.product_id AND p.is_active = 1 AND p.is_delete = 0
+         WHERE c.user_id = ? AND c.is_active = 1 AND c.is_delete = 0`,
+        [user_id],
+      );
+
+      const cartData = cartItemRows || [];
 
       if (!cartData || cartData.length === 0) {
         return middleware.sendApiResponse(
@@ -1328,17 +1812,9 @@ const userModule = {
         );
       }
 
-      const checkCartItemsStock = await db.query(
-        `SELECT c.id, c.quantity, pv.stock
-         FROM tbl_cart AS c
-         JOIN tbl_product_variant AS pv ON pv.id = c.variant_id AND pv.is_active = 1 AND pv.is_delete = 0
-         WHERE c.user_id = ? AND c.is_active = 1 AND c.is_delete = 0`,
-        [user_id],
-      );
-
       const insufficientStockItems = [];
-      if (checkCartItemsStock && checkCartItemsStock.length > 0) {
-        checkCartItemsStock.forEach((item) => {
+      if (cartData && cartData.length > 0) {
+        cartData.forEach((item) => {
           if (item.stock < item.quantity) {
             insufficientStockItems.push({
               cart_item_id: item.id,
@@ -1358,9 +1834,205 @@ const userModule = {
         );
       }
 
+      const productIds = [...new Set(cartData.map((item) => item.product_id))];
+      const [discountRows] = await db.query(
+        `SELECT product_id, discount_type, discount_value
+         FROM tbl_product_discount
+         WHERE product_id IN (?)
+           AND is_active = 1
+           AND is_delete = 0`,
+        [productIds],
+      );
+
+      const discountMap = {};
+      (discountRows || []).forEach((row) => {
+        discountMap[row.product_id] = row;
+      });
+
+      const orderItemsData = cartData.map((item) => {
+        const quantity = Number(item.quantity || 0);
+        const basePrice = Number(item.variant_price || item.base_price || 0);
+        const itemDiscount = discountMap[item.product_id];
+        let finalUnitPrice = basePrice;
+
+        if (itemDiscount) {
+          if (itemDiscount.discount_type === "percentage") {
+            finalUnitPrice -=
+              (basePrice * Number(itemDiscount.discount_value || 0)) / 100;
+          } else if (itemDiscount.discount_type === "flat") {
+            finalUnitPrice -= Number(itemDiscount.discount_value || 0);
+          }
+        }
+
+        finalUnitPrice = Math.max(finalUnitPrice, 0);
+
+        return {
+          variant_id: item.variant_id,
+          quantity,
+          baseUnitPrice: basePrice,
+          finalUnitPrice: Number(finalUnitPrice.toFixed(2)),
+        };
+      });
+
+      const subTotalAmount = Number(
+        orderItemsData
+          .reduce((sum, item) => sum + item.baseUnitPrice * item.quantity, 0)
+          .toFixed(2),
+      );
+      const payableSubTotal = Number(
+        orderItemsData
+          .reduce((sum, item) => sum + item.finalUnitPrice * item.quantity, 0)
+          .toFixed(2),
+      );
+      const productDiscountAmount = Number(
+        Math.max(subTotalAmount - payableSubTotal, 0).toFixed(2),
+      );
+
+      let voucherDiscountAmount = 0;
+      let appliedVoucher = null;
+
+      const voucherCode = String(voucher_code || "").trim();
+      if (voucherCode) {
+        const [voucherRows] = await db.query(
+          `SELECT
+            id,
+            code,
+            discount_type,
+            discount_value,
+            min_order_amount,
+            max_discount,
+            usage_limit,
+            used_count,
+            per_user_limit,
+            start_date,
+            end_date
+           FROM tbl_voucher
+           WHERE code = ? AND is_active = 1 AND is_delete = 0
+           LIMIT 1`,
+          [voucherCode],
+        );
+
+        const voucher = voucherRows?.[0];
+        if (!voucher) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_invalid_voucher",
+            null,
+          );
+        }
+
+        const now = new Date();
+        if (voucher.start_date && new Date(voucher.start_date) > now) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_voucher_not_started",
+            null,
+          );
+        }
+
+        if (voucher.end_date && new Date(voucher.end_date) < now) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_voucher_expired",
+            null,
+          );
+        }
+
+        if (
+          voucher.usage_limit !== null &&
+          Number(voucher.used_count || 0) >= Number(voucher.usage_limit)
+        ) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_voucher_usage_limit_exceeded",
+            null,
+          );
+        }
+
+        const [userRedeemRows] = await db.query(
+          `SELECT COUNT(*) AS total
+           FROM tbl_voucher_redeem
+           WHERE voucher_id = ? AND user_id = ?`,
+          [voucher.id, user_id],
+        );
+        const userRedeemCount = Number(userRedeemRows?.[0]?.total || 0);
+        const perUserLimit = Number(voucher.per_user_limit || 0);
+        if (perUserLimit > 0 && userRedeemCount >= perUserLimit) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_voucher_user_limit_exceeded",
+            null,
+          );
+        }
+
+        const minOrderAmount = Number(voucher.min_order_amount || 0);
+        if (payableSubTotal < minOrderAmount) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_voucher_min_order_not_met",
+            {
+              minimum_order_amount: minOrderAmount,
+              current_order_amount: payableSubTotal,
+            },
+          );
+        }
+
+        if (voucher.discount_type === "percentage") {
+          voucherDiscountAmount =
+            (payableSubTotal * Number(voucher.discount_value || 0)) / 100;
+          if (voucher.max_discount !== null) {
+            voucherDiscountAmount = Math.min(
+              voucherDiscountAmount,
+              Number(voucher.max_discount || 0),
+            );
+          }
+        } else if (voucher.discount_type === "flat") {
+          voucherDiscountAmount = Number(voucher.discount_value || 0);
+        }
+
+        voucherDiscountAmount = Number(
+          Math.min(Math.max(voucherDiscountAmount, 0), payableSubTotal).toFixed(2),
+        );
+
+        if (voucherDiscountAmount <= 0) {
+          return middleware.sendApiResponse(
+            res,
+            STATUS_CODES.SUCCESS,
+            STATUS_CODES.RESPONSE_ERROR,
+            "rest_voucher_not_applicable",
+            null,
+          );
+        }
+
+        appliedVoucher = {
+          id: voucher.id,
+          code: voucher.code,
+        };
+      }
+
+      const discountAmount = Number(
+        (productDiscountAmount + voucherDiscountAmount).toFixed(2),
+      );
+      const taxAmount = 0;
+      const totalAmount = Number(
+        (Math.max(payableSubTotal - voucherDiscountAmount, 0) + taxAmount).toFixed(2),
+      );
+
       let resolvedPaymentId = payment_id ?? null;
       if (!resolvedPaymentId && cardNumber) {
-        const paymentRows = await db.query(
+        const [paymentRows] = await db.query(
           `SELECT id
            FROM tbl_payment
            WHERE user_id = ?
@@ -1373,78 +2045,108 @@ const userModule = {
       }
 
       const orderCode = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const totalAmount = total ?? subtotal ?? 0;
-      const placeOrderResult = await db.query(
-        `INSERT INTO tbl_orders (
-            user_id,
-            payment_id,
-            order_code,
-            order_date,
-            subtotal,
-            tax,
-            discount,
-            total,
-            latitude,
-            longitude,
-            location,
-            total_amount,
-            payment_mode,
-            order_status,
-            is_active,
-            is_delete,
-            created_at,
-            updated_at
-        ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`,
-        [
-          user_id,
-          resolvedPaymentId,
-          orderCode,
-          subtotal ?? 0,
-          tax ?? 0,
-          discount ?? 0,
-          totalAmount,
-          user_latitude ?? null,
-          user_longitude ?? null,
-          user_location ?? null,
-          totalAmount,
-          payment_mode ?? null,
-          "placed",
-        ],
-      );
+      const [placeOrderResult] = await query.insertQuery("tbl_orders", {
+        user_id,
+        payment_id: resolvedPaymentId,
+        order_code: orderCode,
+        order_date: new Date(),
+        subtotal: subTotalAmount,
+        tax: taxAmount,
+        discount: discountAmount,
+        total: totalAmount,
+        latitude: user_latitude ?? null,
+        longitude: user_longitude ?? null,
+        location: user_location ?? null,
+        total_amount: totalAmount,
+        payment_mode: payment_mode ?? null,
+        order_status: "placed",
+        is_active: 1,
+        is_delete: 0,
+      });
 
       if (placeOrderResult && placeOrderResult.affectedRows > 0) {
         const order_id = placeOrderResult.insertId;
-        const orderItemsData = [];
+        const orderItemsInsertData = orderItemsData.map((item) => ({
+          order_id,
+          variant_id: item.variant_id,
+          quantity: item.quantity,
+          price: item.finalUnitPrice,
+          is_active: 1,
+          is_delete: 0,
+        }));
 
-        cartData.forEach((item) => {
-          orderItemsData.push([
-            order_id,
-            item.variant_id,
-            item.quantity,
-            item.price ?? item.unit_price ?? 0,
-          ]);
-        });
+        let insertedOrderItems = 0;
+        for (const orderItem of orderItemsInsertData) {
+          const [insertResult] = await query.insertQuery(
+            "tbl_order_items",
+            orderItem,
+          );
+          insertedOrderItems += Number(insertResult?.affectedRows || 0);
+        }
 
-        const orderItemPlaceholders = orderItemsData
-          .map(() => `(?, ?, ?, ?)`)
-          .join(", ");
-        const orderItemValues = orderItemsData.flat();
-
-        const orderItemsResult = await db.query(
-          `INSERT INTO tbl_order_items (order_id, variant_id, quantity, price) VALUES ${orderItemPlaceholders}`,
-          orderItemValues,
-        );
-
-        if (orderItemsResult && orderItemsResult.affectedRows > 0) {
-          for (const item of orderItemsData) {
-            await db.query(
-              `UPDATE tbl_product_variant SET stock = stock - ? WHERE id = ?`,
-              [item[2], item[1]],
+        if (insertedOrderItems > 0) {
+          if (insertedOrderItems !== orderItemsInsertData.length) {
+            return middleware.sendApiResponse(
+              res,
+              STATUS_CODES.SUCCESS,
+              STATUS_CODES.RESPONSE_ERROR,
+              "ERROR_DURING_ANY",
+              { resource: "Placing Order Items" },
             );
           }
 
-          await db.query(
-            `UPDATE tbl_cart SET is_active = 0, is_delete = 1 WHERE user_id = ?`,
+          for (const item of orderItemsInsertData) {
+            const [stockUpdateResult] = await query.updateQuery(
+              "tbl_product_variant",
+              "stock = stock - ?",
+              "id = ? AND stock >= ?",
+              [item.quantity, item.variant_id, item.quantity],
+            );
+
+            if (!stockUpdateResult || stockUpdateResult.affectedRows === 0) {
+              return middleware.sendApiResponse(
+                res,
+                STATUS_CODES.SUCCESS,
+                STATUS_CODES.RESPONSE_ERROR,
+                "rest_insufficient_stock",
+                { variant_id: item.variant_id },
+              );
+            }
+          }
+
+          if (appliedVoucher && voucherDiscountAmount > 0) {
+            const [voucherRedeemResult] = await query.insertQuery(
+              "tbl_voucher_redeem",
+              {
+                voucher_id: appliedVoucher.id,
+                user_id,
+                order_id,
+                discount_applied: voucherDiscountAmount,
+              },
+            );
+
+            if (!voucherRedeemResult || voucherRedeemResult.affectedRows <= 0) {
+              return middleware.sendApiResponse(
+                res,
+                STATUS_CODES.SUCCESS,
+                STATUS_CODES.RESPONSE_ERROR,
+                "ERROR_DURING_ANY",
+                { resource: "Voucher Redeem Entry" },
+              );
+            }
+
+            await query.updateQuery(
+              "tbl_voucher",
+              "used_count = used_count + 1",
+              "id = ? AND is_active = 1 AND is_delete = 0",
+              [appliedVoucher.id],
+            );
+          }
+
+          await query.updateQuery(
+            "tbl_cart",
+            { is_active: 0, is_delete: 1 },
+            "user_id = ?",
             [user_id],
           );
           console.log(user_id, "userID");
@@ -1459,7 +2161,12 @@ const userModule = {
             STATUS_CODES.SUCCESS,
             STATUS_CODES.RESPONSE_SUCCESS,
             "ORDER_PLACED_SUCCESSFULLY",
-            { order_id, order_code: orderCode },
+            {
+              order_id,
+              order_code: orderCode,
+              voucher_code: appliedVoucher?.code || null,
+              voucher_discount_applied: voucherDiscountAmount,
+            },
           );
         }
 
@@ -1538,8 +2245,26 @@ const userModule = {
         );
       }
 
-      const cancelResult = await db.query(
-        `UPDATE tbl_orders SET order_status = 'cancelled', updated_at = NOW() WHERE id = ? AND user_id = ? AND is_active = 1 AND is_delete = 0`,
+      // Fetch all order items to restore product variant stock
+      const [orderItems] = await db.query(
+        `SELECT variant_id, quantity FROM tbl_order_items WHERE order_id = ? AND is_active = 1 AND is_delete = 0`,
+        [order_id],
+      );
+
+      // Restore stock for each product variant
+      if (orderItems && orderItems.length > 0) {
+        for (const item of orderItems) {
+          await db.query(
+            `UPDATE tbl_product_variant SET stock = stock + ? WHERE id = ? AND is_active = 1 AND is_delete = 0`,
+            [item.quantity, item.variant_id],
+          );
+        }
+      }
+
+      const [cancelResult] = await query.updateQuery(
+        "tbl_orders",
+        "order_status = 'cancelled', updated_at = NOW()",
+        "id = ? AND user_id = ? AND is_active = 1 AND is_delete = 0",
         [order_id, user_id],
       );
       if (cancelResult && cancelResult.affectedRows > 0) {
@@ -1613,7 +2338,7 @@ const userModule = {
         ORDER BY o.created_at DESC
       `;
 
-      const rows = await db.query(sql, [user_id]);
+      const [rows] = await db.query(sql, [user_id]);
 
       if (!rows.length) {
         return middleware.sendApiResponse(
@@ -1652,7 +2377,7 @@ const userModule = {
             payment_mode: r.payment_mode,
             paid_by: {
               method: r.payment_mode,
-              card_masked: last4 ? `**** **** ${last4}` : null,
+              //card_masked: last4 ? `**** **** ${last4}` : null,
             },
             location: {
               latitude: r.latitude,
@@ -1781,7 +2506,7 @@ const userModule = {
           AND (${order_id ? "o.id = ?" : "o.order_code = ?"})
         LIMIT 1`;
 
-      const orderRows = await db.query(orderSql, [
+      const [orderRows] = await db.query(orderSql, [
         user_id,
         order_id || order_code,
       ]);
@@ -1817,7 +2542,7 @@ const userModule = {
           AND oi.is_delete = 0
         ORDER BY oi.id ASC`;
 
-      const itemRows = await db.query(itemsSql, [order.order_id]);
+      const [itemRows] = await db.query(itemsSql, [order.order_id]);
 
       const items = (itemRows || []).map((item) => {
         return {
@@ -1905,7 +2630,7 @@ const userModule = {
         );
       }
 
-      const checkProduct = await db.query(
+      const [checkProduct] = await db.query(
         `SELECT id FROM tbl_product WHERE id = ? AND is_active = 1 AND is_delete = 0`,
         [product_id],
       );
@@ -1919,7 +2644,7 @@ const userModule = {
         );
       }
 
-      const existingFavouriteRows = await db.query(
+      const [existingFavouriteRows] = await db.query(
         `SELECT id, is_active, is_delete FROM tbl_product_favourites WHERE user_id = ? AND product_id = ? LIMIT 1`,
         [user_id, product_id],
       );
@@ -1929,24 +2654,29 @@ const userModule = {
       let result;
 
       if (!existingFavourite) {
-        result = await db.query(
-          `INSERT INTO tbl_product_favourites (product_id, user_id, is_active, is_delete, created_at, updated_at)
-           VALUES (?, ?, 1, 0, NOW(), NOW())`,
-          [product_id, user_id],
-        );
+        [result] = await query.insertQuery("tbl_product_favourites", {
+          product_id,
+          user_id,
+          is_active: 1,
+          is_delete: 0,
+        });
         is_favourite = true;
       } else if (
         Number(existingFavourite.is_active) === 1 &&
         Number(existingFavourite.is_delete) === 0
       ) {
-        result = await db.query(
-          `UPDATE tbl_product_favourites SET is_active = 0, is_delete = 1, updated_at = NOW() WHERE id = ?`,
+        [result] = await query.updateQuery(
+          "tbl_product_favourites",
+          "is_active = 0, is_delete = 1, updated_at = NOW()",
+          "id = ?",
           [existingFavourite.id],
         );
         is_favourite = false;
       } else {
-        result = await db.query(
-          `UPDATE tbl_product_favourites SET is_active = 1, is_delete = 0, updated_at = NOW() WHERE id = ?`,
+        [result] = await query.updateQuery(
+          "tbl_product_favourites",
+          "is_active = 1, is_delete = 0, updated_at = NOW()",
+          "id = ?",
           [existingFavourite.id],
         );
         is_favourite = true;
@@ -2007,7 +2737,7 @@ const userModule = {
         FROM tbl_product_favourites pf
         INNER JOIN tbl_product p ON p.id = pf.product_id AND p.is_active = 1 AND p.is_delete = 0
         WHERE pf.user_id = ? AND pf.is_active = 1 AND pf.is_delete = 0`;
-      const countRows = await db.query(countSql, [user_id]);
+      const [countRows] = await db.query(countSql, [user_id]);
       const totalItems = Number(countRows?.[0]?.total || 0);
 
       const listSql = `SELECT
@@ -2036,7 +2766,7 @@ const userModule = {
         ORDER BY pf.id DESC
         LIMIT ? OFFSET ?`;
 
-      const rows = await db.query(listSql, [user_id, safeLimit, offset]);
+      const [rows] = await db.query(listSql, [user_id, safeLimit, offset]);
 
       const responseData = {
         items: (rows || []).map((row) => ({
@@ -2091,7 +2821,7 @@ const userModule = {
       const user_id = request.loginUser?.id;
       const { product_id, rating, review } = request.body || {};
 
-      const checkProduct = await db.query(
+      const [checkProduct] = await db.query(
         `SELECT id FROM tbl_product WHERE id = ? AND is_active = 1 AND is_delete = 0`,
         [product_id],
       );
@@ -2105,7 +2835,7 @@ const userModule = {
         );
       }
 
-      const existingRating = await db.query(
+      const [existingRating] = await db.query(
         `SELECT id FROM tbl_product_rating WHERE user_id = ? AND product_id = ? AND is_active = 1 AND is_delete = 0`,
         [user_id, product_id],
       );
@@ -2114,15 +2844,19 @@ const userModule = {
           res,
           STATUS_CODES.SUCCESS,
           STATUS_CODES.RESPONSE_ERROR,
-          "rest_rating_already_exists",
+          "rest_rating_already_added",
           null,
         );
       }
 
-      const addRatings = await db.query(
-        `INSERT INTO tbl_product_rating (user_id, product_id, rating, review, is_active, is_delete) VALUES (?, ?, ?, ?, 1, 0)`,
-        [user_id, product_id, rating, review],
-      );
+      const [addRatings] = await query.insertQuery("tbl_product_rating", {
+        user_id,
+        product_id,
+        rating,
+        review,
+        is_active: 1,
+        is_delete: 0,
+      });
       if (addRatings && addRatings.affectedRows > 0) {
         return middleware.sendApiResponse(
           res,
@@ -2155,9 +2889,13 @@ const userModule = {
     try {
       const user_id = request.loginUser?.id;
       const notificationsSql = `SELECT id, title, description , date_format(created_at, '%Y-%m-%d %H:%i:%s') as created_at FROM tbl_notification WHERE receiver_id = ? AND is_active = 1 AND is_delete = 0 ORDER BY created_at DESC`;
-      const notifications = await db.query(notificationsSql, [user_id]);
-      const updateReadSql = `UPDATE tbl_notification SET is_read = 1 WHERE receiver_id = ? AND is_active = 1 AND is_delete = 0`;
-      await db.query(updateReadSql, [user_id]);
+      const [notifications] = await db.query(notificationsSql, [user_id]);
+      await query.updateQuery(
+        "tbl_notification",
+        { is_read: 1 },
+        "receiver_id = ? AND is_active = 1 AND is_delete = 0",
+        [user_id],
+      );
       return middleware.sendApiResponse(
         res,
         STATUS_CODES.SUCCESS,
@@ -2181,7 +2919,7 @@ const userModule = {
     try {
       const user_id = request.loginUser?.id;
       const addressesSql = `SELECT id, name, address_line_1, address_line_2, city, state, country, postal_code, latitude, longitude, is_default FROM tbl_user_address WHERE user_id = ? AND is_active = 1 AND is_delete = 0 ORDER BY is_default DESC, id DESC`;
-      const addresses = await db.query(addressesSql, [user_id]);
+      const [addresses] = await db.query(addressesSql, [user_id]);
       return middleware.sendApiResponse(
         res,
         STATUS_CODES.SUCCESS,
@@ -2206,8 +2944,10 @@ const userModule = {
       const { address_id } = request.body || {};
       const user_id = request.loginUser?.id;
 
-      const setAddress = await db.query(
-        `UPDATE tbl_user_address SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END WHERE user_id = ? AND is_active = 1 AND is_delete = 0`,
+      const [setAddress] = await query.updateQuery(
+        "tbl_user_address",
+        "is_default = CASE WHEN id = ? THEN 1 ELSE 0 END",
+        "user_id = ? AND is_active = 1 AND is_delete = 0",
         [address_id, user_id],
       );
 
@@ -2256,9 +2996,9 @@ const userModule = {
       } = request.body || {};
       const user_id = request.loginUser?.id;
 
-      const updateAddress = await db.query(
-        `UPDATE tbl_user_address SET name = ?, address_line_1 = ?, address_line_2 = ?, city = ?, state = ?, country = ?, postal_code = ?, latitude = ?, longitude = ? WHERE id = ? AND user_id = ? AND is_active = 1 AND is_delete = 0`,
-        [
+      const [updateAddress] = await query.updateQuery(
+        "tbl_user_address",
+        {
           name,
           address_line_1,
           address_line_2,
@@ -2268,9 +3008,9 @@ const userModule = {
           postal_code,
           latitude,
           longitude,
-          address_id,
-          user_id,
-        ],
+        },
+        "id = ? AND user_id = ? AND is_active = 1 AND is_delete = 0",
+        [address_id, user_id],
       );
       if (updateAddress && updateAddress.affectedRows > 0) {
         return middleware.sendApiResponse(
@@ -2304,8 +3044,10 @@ const userModule = {
     try {
       const { address_id } = request.body || {};
       const user_id = request.loginUser?.id;
-      const deleteAddress = await db.query(
-        `UPDATE tbl_user_address SET is_active = 0, is_delete = 1 , is_default = 0 WHERE id = ? AND user_id = ?  AND is_active = 1 AND is_delete = 0`,
+      const [deleteAddress] = await query.updateQuery(
+        "tbl_user_address",
+        { is_active: 0, is_delete: 1, is_default: 0 },
+        "id = ? AND user_id = ? AND is_active = 1 AND is_delete = 0",
         [address_id, user_id],
       );
       if (deleteAddress && deleteAddress.affectedRows > 0) {
@@ -2336,6 +3078,8 @@ const userModule = {
       );
     }
   },
+  
+  
 };
 
 export default userModule;

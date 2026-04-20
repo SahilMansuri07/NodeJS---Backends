@@ -1,6 +1,28 @@
 import jwt from "jsonwebtoken";
 import db from "../config/db.js";
+import query from "../config/dbHelper.js";
+import nodemailer from "nodemailer";
+import multer  from "multer";
+import path from "path";
+import fs from "fs";
+import { profile } from "console";
 
+
+const uploadsDir = path.resolve("uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName =
+      Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueName + path.extname(file.originalname));
+  },
+});
 
 const common = {
     async checkUniqueEmail(request) {
@@ -21,28 +43,6 @@ const common = {
             return result && result.length > 0 ? result[0] : null;
         } catch (error) {
             console.error("Error checking unique mobile number: ", error);
-            throw error;
-        }
-    },
-
-    async checkUserId(request) {
-        try {
-            const sql = "SELECT id FROM tbl_user WHERE id = ? AND is_delete = 0 LIMIT 1";
-            const result = await db.query(sql, [request.id]);
-            return result && result.length > 0 ? result[0] : null;
-        } catch (error) {
-            console.error("Error checking user ID: ", error);
-            throw error;
-        }
-    },
-
-    async checkUsername(request) {
-        try {
-            const sql = "SELECT id, name FROM tbl_user WHERE name = ? AND is_delete = 0 LIMIT 1";
-            const result = await db.query(sql, [request.name]);
-            return result && result.length > 0 ? result[0] : null;
-        } catch (error) {
-            console.error("Error checking unique username: ", error);
             throw error;
         }
     },
@@ -106,18 +106,18 @@ const common = {
                 login_type: normalizedUser.login_type || null,
                 social_id: normalizedUser.social_id || null,
                 is_verified: normalizedUser.is_verified ?? null,
-                role: normalizedUser.role || null,
             };
-
-            const user_id = normalizedUser.id;
-            const token = jwt.sign(payload, process.env.JWT_WEB_TOKEN, { expiresIn: "365d" });
+            
             const requestBody = request?.body || request || {};
             const { device_token, device_type, device_name, device_model, os_version, uuid, ip } = requestBody;
-
+            
+            const user_id = normalizedUser.id;
+            const token = jwt.sign(payload, process.env.JWT_WEB_TOKEN, { expiresIn: "365d" });
+           
             const devicePayload = {
-                user_id,
-                token,
-                device_token: device_token || null,
+                user_id : user_id,
+                token : token || null,
+                device_token: device_token || null, 
                 device_type: device_type || null,
                 device_name: device_name || null,
                 device_model: device_model || null,
@@ -127,25 +127,25 @@ const common = {
                 is_active: 1,
                 is_delete: 0,
             };
-
             if (uuid) {
                 // Check if device already exists
                 const checkSql = "SELECT id FROM tbl_user_device WHERE user_id = ? AND uuid = ? AND is_active = 1 AND is_delete = 0 LIMIT 1";
-                const deviceExists = await db.query(checkSql, [user_id, uuid]);
-
+                const [deviceExists] = await db.query(checkSql, [user_id, uuid]);
                 if (deviceExists && deviceExists.length > 0) {
                     // Update existing device
-                    const updateSql = `UPDATE tbl_user_device SET token = ?, device_token = ?, device_type = ?, device_name = ?, device_model = ?, os_version = ?, ip = ? WHERE user_id = ? AND uuid = ?`;
-                    await db.query(updateSql, [token, device_token || null, device_type || null, device_name || null, device_model || null, os_version || null, ip || null, user_id, uuid]);
+                    await query.updateQuery(
+                        "tbl_user_device",
+                        "token = ?, device_token = ?, device_type = ?, device_name = ?, device_model = ?, os_version = ?, ip = ?",
+                        "user_id = ? AND uuid = ?",
+                        [token, device_token || null, device_type || null, device_name || null, device_model || null, os_version || null, ip || null, user_id, uuid]
+                    );
                 } else {
                     // Create new device
-                    const insertSql = `INSERT INTO tbl_user_device (user_id, token, device_token, device_type, device_name, device_model, os_version, uuid, ip, is_active, is_delete) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`;
-                    await db.query(insertSql, [user_id, token, device_token || null, device_type || null, device_name || null, device_model || null, os_version || null, uuid, ip || null]);
+                    await query.insertQuery("tbl_user_device", devicePayload);
                 }
             } else {
                 // Create device without uuid
-                const insertSql = `INSERT INTO tbl_user_device (user_id, token, device_token, device_type, device_name, device_model, os_version, ip, is_active, is_delete) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`;
-                await db.query(insertSql, [user_id, token, device_token || null, device_type || null, device_name || null, device_model || null, os_version || null, ip || null]);
+                await query.insertQuery("tbl_user_device", devicePayload);
             }
 
             return token;
@@ -175,12 +175,79 @@ const common = {
             const consoleparsedReceiverId = receiver_id == null ? null : Number(receiver_id);
             // console.log("Parsed Receiver ID:", consoleparsedReceiverId);
             // console.log("Original Receiver ID:", receiver_id);
+            const notificationInsert = {
+                sender_id: sender_id ?? null,
+                receiver_id: consoleparsedReceiverId,
+                title: title ?? null,
+                description: description ?? null,
+                is_active: 1,
+                is_delete: 0
+            }
            
-            const sql = `INSERT INTO tbl_notification (sender_id, receiver_id, title, description, is_active, is_delete) VALUES (?, ?, ?, ?, 1, 0)`;
-            await db.query(sql, [sender_id ?? null, consoleparsedReceiverId , title ?? null, description ?? null]);
+            await query.insertQuery("tbl_notification", notificationInsert);
         } catch (error) {
             console.error("Error sending notification: ", error);
         }
+    },
+
+    async sendOtpMail({ toEmail, subject, htmlMessage }) {
+ 
+        if (!toEmail || !subject || !htmlMessage) {
+        return { skipped: true, reason: "Missing toEmail/subject/htmlMessage" };
+        }
+    
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+        const mailFrom = process.env.MAIL_FROM || smtpUser;
+    
+        if (!mailFrom || !smtpUser || !smtpPass) {
+        return { skipped: true, reason: "Mail env is not configured" };
+        }
+    
+        const smtpHost =
+        process.env.SMTP_HOST && process.env.SMTP_HOST !== "smtp.example.com"
+            ? process.env.SMTP_HOST
+            : "smtp.gmail.com";
+    
+        const transporter = nodemailer.createTransport({
+        service: "gmail",
+        host: smtpHost,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: {
+            user: smtpUser,
+            pass: smtpPass,
+        },
+        });
+    
+        const info = await transporter.sendMail({
+        from: mailFrom,
+        to: toEmail,
+        subject,
+        html: htmlMessage,
+        });
+    
+        return { skipped: false, messageId: info.messageId };
+    },
+
+    async deleteOtp (otpId) {
+        try {
+            const deleteOtp = `DELETE FROM tbl_otp WHERE id = ?`;
+            await db.query(deleteOtp, [otpId]);
+        } catch (error) {
+            console.error("Error deleting OTP: ", error);
+        }
+    },
+    profileupload : multer({
+        storage,
+        limits: { fileSize: 2 * 1024 * 1024 },      
+    }),
+
+     getprofileimage(request) {
+        if (request.file && request.file.filename) {
+            return request.file.filename;
+        }
+        return null;
     }
 }
 

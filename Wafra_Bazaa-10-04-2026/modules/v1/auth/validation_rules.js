@@ -1,7 +1,7 @@
 import Joi from "joi"; 
 
 const loginSchema = Joi.object({
-  email: Joi.string().email().trim(),
+  email: Joi.string().trim(),
   country_code: Joi.string().trim(),
   mobile_number: Joi.string().trim(),
   password: Joi.string().trim(),
@@ -57,6 +57,13 @@ const verifyOtpSchema = Joi.object({
   password: Joi.string().trim(),
   login_type: Joi.string().valid("G", "A", "F", "S"),
   language: Joi.string().trim(),
+  device_token: Joi.string().trim(),
+  device_type: Joi.string().trim(),
+  device_name: Joi.string().trim(),
+  device_model: Joi.string().trim(),
+  os_version: Joi.string().trim(),
+  uuid: Joi.string().trim(),
+  ip: Joi.string().trim(),
 })
   .or("email", "mobile_number")
   .with("mobile_number", "country_code")

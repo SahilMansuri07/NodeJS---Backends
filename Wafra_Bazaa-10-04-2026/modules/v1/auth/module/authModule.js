@@ -4,8 +4,37 @@ import middleware from "../../../../middleware/middleware.js";
 import moment from "moment";
 import md5 from "md5";
 import db from "../../../../config/db.js";
+import query from "../../../../config/dbHelper.js";
+import { createOtpWmailTemplate } from "../../../../config/mail.js";
 
 const authModule = {
+
+    async sendOtpByEmail(request, otp) {
+        if (!request?.email) return;
+        
+        const otpType = request.otp_purpose || "signup";
+        const html = createOtpWmailTemplate({
+            userName: request.name || "User",
+            otp,
+            otpType,
+        });
+        
+        const subject =
+            otpType === "forgot_password"
+            ? `${process.env.APP_NAME || "Wafrah Bazar"} Password Reset OTP`
+            : `${process.env.APP_NAME || "Wafrah Bazar"} Signup OTP`;
+        
+        const mailResult = await common.sendOtpMail({
+            toEmail: request.email,
+            subject,
+            htmlMessage: html,
+        });
+        
+        if (mailResult?.skipped) {
+            console.warn("OTP email skipped:", mailResult.reason);
+        }
+    },
+
     async addUserAddress(request, res) {
         try {
             const {
@@ -23,16 +52,6 @@ const authModule = {
                 is_default = 0,
             } = request;
 
-            if (!user_id || !name || !address_line_1 || !city || !state || !country || !postal_code) {
-                return middleware.sendApiResponse(
-                    res,
-                    Codes.SUCCESS,
-                    Codes.MISSING_FIELD,
-                    "rest_keywords_required_fields_missing",
-                    null,
-                );
-            }
-
             const userData = await common.getUserDetails({ id: user_id });
             if (!userData) {
                 return middleware.sendApiResponse(
@@ -47,31 +66,43 @@ const authModule = {
             const isDefaultAddress = Number(is_default) === 1 ? 1 : 0;
 
             if (isDefaultAddress === 1) {
-                const resetDefaultSql = "UPDATE tbl_user_address SET is_default = 0 WHERE user_id = ? AND is_delete = 0";
-                await db.query(resetDefaultSql, [Number(user_id)]);
+                await query.updateQuery(
+                    "tbl_user_address",
+                    { is_default: 0 },
+                    "user_id = ? AND is_delete = 0",
+                    [Number(user_id)],
+                );
             }
 
-            const insertSql = `INSERT INTO tbl_user_address
-                (user_id, name, company_name, address_line_1, address_line_2, latitude, longitude, city, state, country, postal_code, is_default, is_active, is_delete, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`;
+            const addressData1 = {
+                user_id: Number(user_id),
+                name: String(name).trim(),
+                company_name: company_name ? String(company_name).trim() : null,
+                address_line_1: String(address_line_1).trim(),
+                address_line_2: address_line_2 ? String(address_line_2).trim() : null,
+                latitude: latitude ? String(latitude).trim() : null,
+                longitude: longitude ? String(longitude).trim() : null,
+                city: String(city).trim(),
+                state: String(state).trim(),
+                country: String(country).trim(),
+                postal_code: String(postal_code).trim(),
+                is_default: isDefaultAddress,
+            };
 
-            const insertResult = await db.query(insertSql, [
-                Number(user_id),
-                String(name).trim(),
-                company_name ? String(company_name).trim() : null,
-                String(address_line_1).trim(),
-                address_line_2 ? String(address_line_2).trim() : null,
-                latitude ? String(latitude).trim() : null,
-                longitude ? String(longitude).trim() : null,
-                String(city).trim(),
-                String(state).trim(),
-                String(country).trim(),
-                String(postal_code).trim(),
-                isDefaultAddress,
-            ]);
+            const [insertResult] = await query.insertQuery("tbl_user_address", addressData1);
 
             const getAddressSql = "SELECT * FROM tbl_user_address WHERE id = ? LIMIT 1";
             const addressData = await db.query(getAddressSql, [insertResult.insertId]);
+
+            if (addressData && addressData.length > 0) {
+                return middleware.sendApiResponse(
+                    res,
+                    Codes.SUCCESS,
+                    Codes.RESPONSE_SUCCESS,
+                    "rest_user_address_already_exists",
+                    addressData[0] || null,
+                );
+            }
 
             return middleware.sendApiResponse(
                 res,
@@ -80,6 +111,7 @@ const authModule = {
                 "rest_user_address_added_successfully",
                 addressData[0] || null,
             );
+
         } catch (error) {
             console.error("Error in addUserAddress:", error);
             return middleware.sendApiResponse(
@@ -98,7 +130,8 @@ const authModule = {
             
             // Check unique email
             if (email) {
-                const emailExists = await common.checkUniqueEmail(request);
+                const [emailExists] = await common.checkUniqueEmail(request);
+                console.log("Email uniqueness check result: ", emailExists);
                 if (emailExists) {
                     return middleware.sendApiResponse(
                         res,
@@ -112,7 +145,7 @@ const authModule = {
 
             // Check unique mobile
             if (mobile_number && country_code) {
-                const mobileExists = await common.checkUniqueMobileNumber(request);
+                const [mobileExists] = await common.checkUniqueMobileNumber(request);
                 if (mobileExists) {
                     return middleware.sendApiResponse(
                         res,
@@ -123,10 +156,10 @@ const authModule = {
                     );
                 }
             }
-            console.log("social_id", social_id, "login_type", login_type);
+
             // Check unique social ID
             if (social_id && login_type) {
-                const socialExists = await common.checkSocialId(request);
+                const [socialExists] = await common.checkSocialId(request);
                 if (socialExists) {
                     return middleware.sendApiResponse(
                         res,
@@ -137,11 +170,18 @@ const authModule = {
                     );
                 }
                 
+                // Insert User Data
+                const insertUser = {
+                    name : name || null,
+                    email : email || null,
+                    country_code : country_code || null,
+                    mobile_number : mobile_number || null,
+                    login_type : login_type || null,
+                    social_id : social_id || null,
+                    is_verified : 1,
+                }
                 // Create user for social login
-                const sql = `INSERT INTO tbl_user 
-                    (name, email, country_code, mobile_number, login_type, social_id, is_verified) 
-                    VALUES (?, ?, ?, ?, ?, ?, 1)`;
-                const sqlResult = await db.query(sql, [name || null, email || null, country_code || null, mobile_number || null, login_type || null, social_id || null]);
+                const [sqlResult] = await query.insertQuery("tbl_user", insertUser);
                 
                 const userData = await common.getUserDetails({id : sqlResult.insertId });
                // console.log(userData);console.log(sqlResult);
@@ -155,13 +195,13 @@ const authModule = {
                     { userData, token },
                 );
                 
-                }
-                return middleware.sendApiResponse(
-                    res,
-                Codes.SUCCESS,
-                Codes.RESPONSE_SUCCESS,
-                "rest_keywords_success",
-                null,
+            }
+            return middleware.sendApiResponse(
+                res,
+            Codes.SUCCESS,
+            Codes.RESPONSE_SUCCESS,
+            "rest_keywords_success",
+            null,
             );
         } catch (error) {
             console.error("Error validating user: ", error);
@@ -175,83 +215,133 @@ const authModule = {
         }
     },
 
-    async login(req , res) {
-    try {
-        const {
-            email,
-            country_code,
-            mobile_number,
-            password,
-            social_id,
-            login_type,
-        } = req;
+    async login(req, res) {
+  try {
+    const {
+      email,
+      country_code,
+      mobile_number,
+      password,
+      social_id,
+      login_type,
+    } = req;
 
-        //  Validate input
-        if (!email && !(country_code && mobile_number) && !(social_id && login_type)) {
-            return middleware.sendApiResponse(res, Codes.SUCCESS, Codes.MISSING_FIELD, "Required fields missing");
-        }
+    console.log("Login request received:", req);
 
-        if (!social_id && !password) {
-            return middleware.sendApiResponse(res, Codes.SUCCESS, Codes.MISSING_FIELD, "Password required");
-        }
+    let query = `
+      SELECT * FROM tbl_user 
+      WHERE is_delete = 0 AND is_active = 1
+    `;
+    let params = [];
 
-        //  Build query
-        let query = `
-            SELECT * FROM tbl_user 
-            WHERE is_delete = 0 AND is_active = 1 AND
-        `;
-        let params = [];
+    //  CASE 1: Social Login
+    if (social_id && login_type) {
+      query += ` AND social_id = ? AND login_type = ?`;
+      params = [social_id, login_type];
+    }
 
-        if (social_id && login_type) {
-            query += " social_id = ? AND login_type = ?";
-            params = [social_id, login_type];
-        } else if (email) {
-            query += " email = ?";
-            params = [email];
-        } else {
-            query += " country_code = ? AND mobile_number = ?";
-            params = [country_code, mobile_number];
-        }
+    //  CASE 2: Email Login
+    else if (email && password) {
+      query += ` AND  email = ?`;
+      params = [email];
+    }
 
-        query += " LIMIT 1";
+    //  CASE 3: Mobile Login
+    else if (country_code && mobile_number && password) {
+      query += ` AND country_code = ? AND mobile_number = ?`;
+      params = [country_code, mobile_number];
+    }
 
-        const [user] = await db.query(query, params);
+    //  Invalid Request
+    else {
+      return middleware.sendApiResponse(
+        res,
+        Codes.SUCCESS,
+        Codes.RESPONSE_ERROR,
+        "Invalid login parameters"
+      );
+    }
 
-        //  User not found
-        if (!user) {
-            return middleware.sendApiResponse(res, Codes.SUCCESS, Codes.RESPONSE_ERROR, "User not found");
-        }
+    query += ` LIMIT 1`;
+    console.log("Executing login query: ", query, "with params: ", params);
 
-        //  Password check (skip for social login)
-        if (!social_id) {
-            if (user.password !== md5(password)) {
-                return middleware.sendApiResponse(res, Codes.SUCCESS, Codes.RESPONSE_ERROR, "Invalid credentials");
-            }
-        }
+    // Correct DB call
+    const [rows] = await db.query(query, params);
 
-        //  Generate token
-        const token = await common.generateToken(user, req);
+    console.log("Login query executed with params:", rows);
+    const user = rows[0];
 
+    //  User not found
+    if (!user) {
+      return middleware.sendApiResponse(
+        res,
+        Codes.SUCCESS,
+        Codes.RESPONSE_ERROR,
+        "User not found"
+      );
+    }
 
+    //  Password Check (skip for social login)
+    if (!social_id) {
+      if (!password) {
+        return middleware.sendApiResponse(
+          res,
+          Codes.SUCCESS,
+          Codes.RESPONSE_ERROR,
+          "Password is required"
+        );
+      }
+
+    //   console.log("Checking password for entered " , md5(password));
+    //   console.log("Checking password for user " , user.password);
+      if (user.password !== md5(password)) {
+        return middleware.sendApiResponse(
+          res,
+          Codes.SUCCESS,
+          Codes.RESPONSE_ERROR,
+          "Invalid credentials"
+        );
+      }
+    }
+
+    if(user.is_verified === 0) {
         return middleware.sendApiResponse(
             res,
             Codes.SUCCESS,
-            Codes.RESPONSE_SUCCESS,
-            "Login successful",
-            { userData: user, token }
+            Codes.RESPONSE_ERROR,
+            "User_not_verified",
+            null
         );
+    }
 
-        } catch (error) {
-            console.error(error);
-            return middleware.sendApiResponse(res, Codes.INTERNAL_ERROR, Codes.RESPONSE_ERROR, "Something went wrong");
-        }
-    } ,
+
+    //  Generate Token
+    const token = await common.generateToken(user, req);
+
+    return middleware.sendApiResponse(
+      res,
+      Codes.SUCCESS,
+      Codes.RESPONSE_SUCCESS,
+      "Login successful",
+      { userData: user, token }
+    );
+
+  } catch (error) {
+    console.error("Login error:", error);
+    return middleware.sendApiResponse(
+      res,
+      Codes.INTERNAL_ERROR,
+      Codes.RESPONSE_ERROR,
+      "Something went wrong"
+    );
+  }
+    },
 
     async requestOtp(request, res) {
         try {
             const { country_code, mobile_number, email, type, otp_purpose } = request;
-            console.log("Requesting OTP with data: ", request);
-            console.log(email);
+             // console.log("Requesting OTP with data: ", request);
+            // console.log(email);
 
             // Check user exists for "s" type
             if (type === "s") {
@@ -324,27 +414,37 @@ const authModule = {
             console.log("expiryTime --->", expiryTime);
 
             // Update existing OTPs to inactive
-            let updateSql = "UPDATE tbl_otp SET is_delete = 1 WHERE is_active = 1 AND is_delete = 0 AND (";
+            let updateWhere = "is_active = 1 AND is_delete = 0 AND (";
             let updateParams = [];
 
             if (mobile_number && country_code) {
-                updateSql += "country_code = ? AND mobile_number = ?";
+                updateWhere += "country_code = ? AND mobile_number = ?";
                 updateParams.push(country_code, mobile_number);
             } else if (email) {
-                updateSql += "email = ?";
+                updateWhere += "email = ?";
                 updateParams.push(email);
             }
-            updateSql += ")";
+            updateWhere += ")";
 
-            await db.query(updateSql, updateParams);
+            await query.updateQuery("tbl_otp", "is_delete = 1", updateWhere, updateParams);
             console.log("Existing OTPs invalidated");
 
+            const otpInsert = {
+                country_code: country_code || null,
+                mobile_number: mobile_number || null,
+                email: email || null,
+                otp,
+                expires_at: expiryTime,
+                otp_purpose: otp_purpose || "signup",
+                is_active: 1,
+                is_delete: 0,
+            }
             // Create new OTP
-            const insertSql = `INSERT INTO tbl_otp 
-                (country_code, mobile_number, email, otp, expires_at, otp_purpose, is_active, is_delete) 
-                VALUES (?, ?, ?, ?, ?, ?, 1, 0)`;
-            await db.query(insertSql, [country_code || null, mobile_number || null, email || null, otp, expiryTime, otp_purpose || "signup"]);
-
+                await query.insertQuery("tbl_otp", otpInsert);
+                console.log("New OTP inserted into database" , request);
+                if(email){
+                await this.sendOtpByEmail(request, otp);
+                }
             return middleware.sendApiResponse(
                 res,
                 Codes.SUCCESS,
@@ -366,28 +466,41 @@ const authModule = {
     },
 
     async verifyOtp(request, res) {
+        //  console.log("request body in verify otp", request.body);
         try {
-            const { country_code, mobile_number, email = null, name, password, login_type , language , otp } = request;
-
+            const {
+                country_code,
+                mobile_number,
+                email: rawEmail = null,
+                name,
+                password,
+                login_type,
+                language,
+                otp,
+            } = request.body;
+            const email = rawEmail ? String(rawEmail).trim().toLowerCase() : null;
+            
             // For signup flow, check uniqueness first.
             if (password) {
                 if (email) {
-                    const emailSql = "SELECT id FROM tbl_user WHERE email = ? AND is_delete = 0 LIMIT 1";
-                    const emailExists = await db.query(emailSql, [email]);
+                    const emailSql = "SELECT id FROM tbl_user WHERE LOWER(email) = ? AND is_delete = 0 LIMIT 1";
+                    console.log("Checking email uniqueness with SQL: ", emailSql, "and email: ", email);
+                    const [emailExists] = await db.query(emailSql, [email]);
+                    console.log("Email exists check result: ", emailExists);
                     if (emailExists && emailExists.length > 0) {
                         return middleware.sendApiResponse(
                             res,
                             Codes.SUCCESS,
                             Codes.RESPONSE_ERROR,
-                            "rest_email_already_exists",
+                            "rest_email_already_exists",    
                             null,
                         );
                     }
                 }
-
+            
                 if (country_code && mobile_number) {
                     const mobileSql = "SELECT id FROM tbl_user WHERE country_code = ? AND mobile_number = ? AND is_delete = 0 LIMIT 1";
-                    const mobileExists = await db.query(mobileSql, [country_code, mobile_number]);
+                    const [mobileExists] = await db.query(mobileSql, [country_code, mobile_number]);
                     if (mobileExists && mobileExists.length > 0) {
                         return middleware.sendApiResponse(
                             res,
@@ -399,21 +512,25 @@ const authModule = {
                     }
                 }
             }
-
+            // console.log(email, "email in verify otp");
             // Find OTP record
             let otpSql = "SELECT id, expires_at, is_active, is_delete, otp_purpose FROM tbl_otp WHERE otp = ? AND (";
             let otpParams = [otp];
-
-            if (country_code && mobile_number) {
-                otpSql += "country_code = ? AND mobile_number = ?";
-                otpParams.push(country_code, mobile_number);
-            } else if (email) {
-                otpSql += "email = ?";
+            if (email) {
+                otpSql += "LOWER(email) = ?";
                 otpParams.push(email);
+            } 
+            if (country_code && mobile_number) {
+                otpSql += "OR (country_code = ? AND mobile_number = ? )";
+                otpParams.push(country_code, mobile_number);
             }
             otpSql += ") ORDER BY created_at DESC LIMIT 1";
-
-            const otpRecords = await db.query(otpSql, otpParams);
+            
+            //  console.log(otpSql , "otp query");
+            // console.log(email , "email in otp query");
+            //console.log(otpParams , "otp params");
+            const [otpRecords] = await db.query(otpSql, otpParams);
+            console.log("Finding OTP with SQL: ", otpSql, "and params: ", otpParams);
             console.log("OTP Record found: ", otpRecords);
 
             if (!otpRecords || otpRecords.length === 0) {
@@ -427,7 +544,7 @@ const authModule = {
             }
 
             const otpRecord = otpRecords[0];
-
+            console.log("OTP Record details: ", otpRecord);
             if (otpRecord.is_delete === 1 || otpRecord.is_active === 0) {
                 return middleware.sendApiResponse(
                     res,
@@ -462,47 +579,57 @@ const authModule = {
                 }
 
                 // Invalidate OTP only after all checks pass.
-                const updateOtpSql = "UPDATE tbl_otp SET is_active = 0, is_delete = 1 WHERE id = ?";
-                await db.query(updateOtpSql, [otpRecord.id]);
-
+                // await query.updateQuery("tbl_otp", { is_active: 0, is_delete: 1 }, "id = ?", [otpRecord.id]);
+                await common.deleteOtp(otpRecord.id);
+ 
+                const userInsert = {
+                    name : name || null,
+                    email : email || null,
+                    country_code : country_code || null,
+                    mobile_number : mobile_number || null,
+                    login_type : login_type || "S",
+                    social_id : null,
+                    password : md5(password),
+                    language : language || null,
+                    is_verified : 1,
+                    steps : 1
+                }
+                
                 // Create user
-                const hashedPassword = md5(password);
-                const createUserSql = `INSERT INTO tbl_user 
-                    (country_code, mobile_number, email, password, login_type , language, is_verified, name, is_active, is_delete) 
-                    VALUES (?, ?, ?, ?, ?, ?, 1 ,?, 1, 0)`;
-                const result = await db.query(createUserSql, [
-                    country_code || null,
-                    mobile_number || null,
-                    email || null,
-                    hashedPassword || null,
-                    login_type || "S",
-                    language || null,
-                    name || null
-                ]);
-
-                console.log("User created with ID: ", result.insertId);
+                const [result] = await query.insertQuery("tbl_user", userInsert);
+  
+                // console.log("User created with ID: ", result.insertId);
 
                 // Get user details
-                const getUserSql = "SELECT * FROM tbl_user WHERE id = ? AND is_delete = 0 LIMIT 1";
-                const userData = await db.query(getUserSql, [result.insertId]);
-
+                const [userData] = await common.getUserDetails(result.insertId);
+                // console.log("User data retrieved: ", userData);
                 // Generate token
-                const token = await common.generateToken(userData[0], request);
-
+                const token = await common.generateToken(userData[0], request.body);
+                // console.log("Generated token: ", token);
                 return middleware.sendApiResponse(
                     res,
                     Codes.SUCCESS,
                     Codes.RESPONSE_SUCCESS,
                     "rest_keywords_otp_verified_and_signUp_successful",
-                    { userData, token },
+                    { userData: userData[0], token },
                 );
             }
+            
+            // await query.updateQuery("tbl_otp", { is_active: 0, is_delete: 1 }, "id = ?", [otpRecord.id]);
+            await common.deleteOtp(otpRecord.id);
+            if (otpRecord.otp_purpose === "forgot_password") {
+                    // For forgot password flow, just return success on OTP verification. Password reset will be handled in separate API.
+                    return middleware.sendApiResponse(
+                        res,
+                        Codes.SUCCESS,
+                        Codes.RESPONSE_SUCCESS,
+                        "rest_keywords_otp_verified",
+                        null,
+                    );
+                }
+                // For non-signup OTP purposes, only invalidate OTP after validation.
 
-            // For non-signup OTP purposes, only invalidate OTP after validation.
-            const updateOtpSql = "UPDATE tbl_otp SET is_active = 0, is_delete = 1 WHERE id = ?";
-            await db.query(updateOtpSql, [otpRecord.id]);
-
-            return true; // For other OTP purposes, just return success after verification
+            
 
         } catch (error) {
             console.log("Error in verifyOtp: ", error);
@@ -536,8 +663,8 @@ const authModule = {
         try {
             const { email } = request;
             
-            const sql = "SELECT id FROM tbl_user WHERE email = ? AND is_delete = 0 LIMIT 1";
-            const emailExists = await db.query(sql, [email]);
+            const sql= "SELECT id FROM tbl_user WHERE email = ? AND is_delete = 0 LIMIT 1";
+            const [emailExists] = await db.query(sql, [email]);
             if (!emailExists || emailExists.length === 0) {
                 return middleware.sendApiResponse(
                     res,
@@ -549,8 +676,8 @@ const authModule = {
             }
 
             const forgetOtp = await this.requestOtp({ email, otp_purpose: "forgot_password" }, res);
-            console.log("Forget password OTP result: ", forgetOtp);
-
+            // console.log("Forget password OTP result: ", forgetOtp);
+            
         } catch (error) {
             console.log("Error in forgetPassword: ", error);
             return middleware.sendApiResponse(
@@ -562,24 +689,6 @@ const authModule = {
             );
         }
     },
-
-    // async verifyForgetPasswordOtp(request, res) {
-    //     try {
-    //         const { email, otp, new_password } = request;
-
-    //         const verifyOtp = await this.verifyOtp({ email, otp }, res);
-
-    //     } catch (error) {
-    //         console.log("Error in verifyForgetPasswordOtp: ", error);
-    //         return middleware.sendApiResponse(
-    //             res,
-    //             Codes.INTERNAL_ERROR,
-    //             Codes.RESPONSE_ERROR,
-    //             "rest_keywords_error",
-    //             null,
-    //         );
-    //     }
-    // },
 
     async resetPassword(request, res) {
         try {
@@ -598,8 +707,9 @@ const authModule = {
             }
 
             const hashedPassword = md5(new_password);
-            const updateSql = "UPDATE tbl_user SET password = ? WHERE email = ?";
-            await db.query(updateSql, [hashedPassword, email]);
+            // const updateSql = "UPDATE tbl_user SET password = ? WHERE email = ?";
+            // await db.query(updateSql, [hashedPassword, email]);
+            await query.updateQuery("tbl_user", "password = ?" , "email = ? ", [hashedPassword, email]);
 
             return middleware.sendApiResponse(
                 res,
@@ -622,10 +732,14 @@ const authModule = {
 
     async updateProfile(request, res) {
         try {
-            const { user_id, profile_image, is_skip = 0 } = request;
+            const { is_skip = 0 } = request.body || {};
+            // console.log("updateProfile called with data: ", request.body);
+            const user_id = request.loginUser?.id;
             
-            const sql = "SELECT id FROM tbl_user WHERE id = ? AND is_delete = 0 LIMIT 1";
-            const userData = await db.query(sql, [user_id]);
+            // console.log(user_id)
+
+            // console.log("Updating profile for user ID: ", user_id, "with data: ", request.body);
+            const userData = await common.getUserDetails({ id: user_id });
             if (!userData || userData.length === 0) {
                 return middleware.sendApiResponse(
                     res,
@@ -637,16 +751,28 @@ const authModule = {
             }
 
             if (is_skip == 0) {
-                const sql = "UPDATE tbl_user SET profile_image = ? WHERE id = ?";
-                await db.query(sql, [profile_image, user_id]);
+                let steps = userData[0].steps || 1;
+                if ( steps === 2){
+                     return middleware.sendApiResponse(
+                        res,
+                        Codes.SUCCESS,
+                        Codes.RESPONSE_SUCCESS,
+                        "rest_profile_already_updated",
+                        null
+                    );
+                }
+                
+                const [result] = await query.updateQuery("tbl_user", { profile_image: request.body .profile_image , steps : steps = 2  }, "id = ?", [user_id]);
+                if(result  && result.affectedRows > 0){
 
-                return middleware.sendApiResponse(
-                    res,
-                    Codes.SUCCESS,
-                    Codes.RESPONSE_SUCCESS,
-                    "rest_profile_updated_successfully",
-                    null
-                );
+                    return middleware.sendApiResponse(
+                        res,
+                        Codes.SUCCESS,
+                        Codes.RESPONSE_SUCCESS,
+                        "rest_profile_updated_successfully",
+                        null
+                    );
+                } 
             }
 
             return middleware.sendApiResponse(
@@ -673,9 +799,8 @@ const authModule = {
             const user_id = request.user.id;
             const { old_password, new_password } = request;
             
-            const sql = "SELECT id FROM tbl_user WHERE id = ? AND is_delete = 0 LIMIT 1";
-            const user1Data = await db.query(sql, [user_id]);
-            if (!user1Data || user1Data.length === 0) {
+          const userData1 = await common.getUserDetails({ id: user_id });
+            if (!userData1 || userData1.length === 0) {
                 return middleware.sendApiResponse(
                     res,
                     Codes.SUCCESS,
@@ -700,9 +825,7 @@ const authModule = {
             }
 
             const hashedNewPassword = md5(new_password);
-            const updateSql = "UPDATE tbl_user SET password = ? WHERE id = ?";
-            await db.query(updateSql, [hashedNewPassword, user_id]);
-
+            await query.updateQuery("tbl_user", "password = ?" , "id = ? ", [hashedNewPassword, user_id]);
             return middleware.sendApiResponse(
                 res,
                 Codes.SUCCESS,
@@ -728,10 +851,8 @@ const authModule = {
             const token = request.headers['token'];
             console.log("Logout requested with token: ", token);
 
-            const updateSql = "UPDATE tbl_user_devices SET token = NULL WHERE token = ?";
-            const result = await db.query(updateSql, [token]);
+            const [result] = await query.updateQuery("tbl_user_devices", { token: null }, "token = ?", [token]);
 
-            console.log("Token invalidation result: ", result);
 
             if (!result || result.affectedRows === 0) {
                 return middleware.sendApiResponse(
@@ -766,11 +887,9 @@ const authModule = {
     async setProfile (request , res) {
         try {
             const user_id = request.loginUser.id;
-            const { name, email, country_code , phone , profile_image} = request.body;
+            const { name, email, country_code , mobile_number , profile_image} = request.body;
             
-            const updateSql = "UPDATE tbl_user SET name = ?, email = ?, country_code = ?, mobile_number = ?, profile_image = ? WHERE id = ?";
-            const result = await db.query(updateSql, [name, email, country_code, phone, profile_image, user_id]);
-            
+            const [result] = await query.updateQuery("tbl_user", { name, email, country_code, mobile_number, profile_image }, "id = ?", [user_id]);
             const userData = await common.getUserDetails({ id: user_id });
             
             if (!userData) {
@@ -799,24 +918,23 @@ const authModule = {
                     userData
                 );
         }catch (error) {
-            console.log("Error in setProfile: ", error);
-            return middleware.sendApiResponse(
-                res,
-                Codes.INTERNAL_ERROR,
-                Codes.RESPONSE_ERROR,
-                "rest_keywords_error",
-                null
-            );
+        console.log("Error in setProfile: ", error);
+        return middleware.sendApiResponse(
+            res,
+            Codes.INTERNAL_ERROR,
+            Codes.RESPONSE_ERROR,
+            "rest_keywords_error",
+            null
+        );
        }
     },
-    
+
     async setLanguage(request , res){
         try {
             const { language } = request.body;
             const user_id = request.loginUser.id;
 
-            const updateSql = "UPDATE tbl_user SET language = ? WHERE id = ?";
-            const result = await db.query(updateSql, [language, user_id]);
+            const [result] = await query.updateQuery("tbl_user", { language }, "id = ?", [user_id]);
             if (result && result.affectedRows > 0) {
                 return middleware.sendApiResponse(
                     res,
@@ -862,8 +980,7 @@ const authModule = {
                 );
             }
             const hashedNewPassword = md5(new_password);
-            const updateSql = "UPDATE tbl_user SET password = ? WHERE id = ?";
-            await db.query(updateSql, [hashedNewPassword, user_id]);
+            await query.updateQuery("tbl_user", { password: hashedNewPassword }, "id = ?", [user_id]);
             return middleware.sendApiResponse(
                 res,
                 Codes.SUCCESS,
@@ -882,6 +999,7 @@ const authModule = {
             );
         }
     }
+
 };
 
 export default authModule;

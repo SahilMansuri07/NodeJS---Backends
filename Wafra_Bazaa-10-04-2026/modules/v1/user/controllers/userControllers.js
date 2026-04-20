@@ -25,6 +25,10 @@ const userController = {
         return userModule.categoryListing(request, res);
     },
 
+    async faqListing(request, res) {
+        return userModule.faqListing(request, res);
+    },
+
     async productDetails(request, res) {
         return userModule.productDetails(request, res);
     },
@@ -60,12 +64,20 @@ const userController = {
         return userModule.placeOrderFromCart(request, res);
     },
 
+    async redeemVoucher(request, res) { 
+        return userModule.redeemVoucher(request, res);
+    },
+
     async orderHistory(request, res) {
         return userModule.orderHistory(request, res);
     },
 
     async orderDetails(request, res) {
-        return userModule.orderDetails(request, res);
+        return userModule.orderDetails(request, res); 
+    },
+
+    async orderSummary(request, res) {
+        return userModule.orderSummary(request, res);
     },
 
     async addRemoveFavourites(request, res) {
@@ -98,6 +110,9 @@ const userController = {
 
     async deleteAddress(request, res) {
         return userModule.deleteAddress(request, res);
+    },
+    async contactUs(request, res) {
+        return userModule.contactUs(request, res);
     },
      async cancelOrder(request, res) {
         return userModule.cancelOrder(request, res);

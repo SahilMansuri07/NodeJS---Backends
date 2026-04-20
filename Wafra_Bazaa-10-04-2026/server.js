@@ -6,6 +6,8 @@ import swaggerSpec from "./config/swagger.js";
 import middleware from "./middleware/middleware.js";
 import authRoutes from "./modules/v1/auth/routes/authRoute.js";
 import userRoutes from "./modules/v1/user/routes/userRoute.js";
+import { start } from "repl";
+import startCronJobs from "./config/cron.js";
 
 dotenv.config();
 const PORT = process.env.PORT || 5020;
@@ -34,14 +36,18 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   },
 }));
 
+
+app.use("/uploads", express.static("uploads"));
 app.use(middleware.tokenMiddleware);
 app.use(middleware.checkApi);
-// app.use(middleware.decryption);
+app.use(middleware.decryption);
 
 
 // API Routes
 app.use("/api/v1/auth/", authRoutes);
 app.use("/api/v1/user/", userRoutes);
+
+//uploads folder for static files
 
 // Test database connection
 async function testDbConnection() {
@@ -65,7 +71,8 @@ async function startServer() {
     if (!isConnected) {
       process.exit(1);
     }
-
+    
+    startCronJobs();
     app.listen(PORT, () => {
       console.log(`✓ Server is running on port ${PORT}`);
     });
